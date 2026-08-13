@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="robots" content="noindex, nofollow, noarchive">
+<script>
+(function(){
+  document.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+  document.addEventListener('keydown', function(e){
+    var k = e.key;
+    var blockedKey = (k === 'F12');
+    var blockedCombo = (e.ctrlKey || e.metaKey) && (
+      k === 'u' || k === 'U' ||
+      k === 's' || k === 'S' ||
+      (e.shiftKey && (k === 'i' || k === 'I' || k === 'j' || k === 'J' || k === 'c' || k === 'C'))
+    );
+    if (blockedKey || blockedCombo) e.preventDefault();
+  });
+})();
+</script>
+<meta charset="UTF-8">
+<title>Same Mass, Different Heat — Temperature Rise Comparison</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #000;
+    height: auto;
+    overflow-x: hidden;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    color: #eee;
+  }
+
+  #stage {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    background: #000;
+  }
+
+  #canvasHost {
+    position: absolute;
+    inset: 0;
+  }
+
+  canvas { display: block; }
+
+  .title {
+    position: absolute;
+    top: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #fff;
+    font-size: 20px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    text-shadow: 0 0 8px #0ff, 0 0 18px #0ff;
+    text-align: center;
+    white-space: nowrap;
+    z-index: 5;
+    pointer-events: none;
+  }
+
+  .subtitle {
+    position: absolute;
+    top: 50px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 12.5px;
+    color: #999;
+    text-align: center;
+    z-index: 5;
+    pointer-events: none;
+    max-width: 640px;
+  }
+
+  #result {
+    position: absolute;
+    bottom: 96px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 640px;
+    text-align: center;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #eee;
+    background: rgba(255,180,0,0.06);
+    border: 1px solid #ffb400;
+    border-radius: 12px;
+    padding: 12px 20px;
+    box-shadow: 0 0 14px rgba(255,180,0,0.25);
+    opacity: 0;
+    transition: opacity 0.8s ease;
+    z-index: 5;
+  }
+  #result.show { opacity: 1; }
+  #result b { color: #ffb400; }
+
+  #controls {
+    position: absolute;
+    bottom: 26px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 20px;
+    z-index: 5;
+  }
+
+  button {
+    font-family: inherit;
+    font-size: 14px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 12px 24px;
+    border-radius: 10px;
+    background: #050505;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  #btnHeat {
+    color: #ff3b3b;
+    border: 2px solid #ff3b3b;
+    box-shadow: 0 0 10px rgba(255,59,59,0.5);
+  }
+  #btnHeat:hover:not(:disabled) { background: rgba(255,59,59,0.12); box-shadow: 0 0 20px #ff3b3b; }
+
+  #btnReset {
+    color: #999;
+    border: 2px solid #555;
+  }
+  #btnReset:hover { color: #fff; border-color: #fff; box-shadow: 0 0 12px #fff; }
+
+  #btnInner {
+    color: #a8a8ac;
+    border: 2px solid #a8a8ac;
+    box-shadow: 0 0 10px rgba(168,168,172,0.4);
+  }
+  #btnInner:hover { background: rgba(168,168,172,0.12); box-shadow: 0 0 20px #a8a8ac; }
+
+  button:disabled { opacity: 0.3; cursor: not-allowed; }
+
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="canvasHost"></div>
+
+  <div class="title">Same Mass, Different Heat Energy</div>
+  <div class="subtitle">Two identical phones, equal mass — one receives 10 kJ, the other 100 kJ. Which one heats up more?</div>
+
+  <div id="result"></div>
+
+  <div id="controls">
+    <button id="btnHeat">Supply Heat</button>
+    <button id="btnInner">Show Inner Components</button>
+    <button id="btnReset">Reset</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>"use strict";
+const host = document.getElementById('canvasHost');
+const btnHeat = document.getElementById('btnHeat');
+const btnInner = document.getElementById('btnInner');
+const btnReset = document.getElementById('btnReset');
+const resultEl = document.getElementById('result');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000);
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.set(0, 1.2, 9);
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+host.appendChild(renderer.domElement);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 4;
+controls.maxDistance = 16;
+controls.target.set(0, 0, 0);
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+scene.add(new THREE.AmbientLight(0x222233, 1.2));
+const rimCyan = new THREE.PointLight(0x00eaff, 1.4, 20);
+rimCyan.position.set(-6, 4, 6);
+scene.add(rimCyan);
+const rimMagenta = new THREE.PointLight(0xff2fd6, 1.2, 20);
+rimMagenta.position.set(6, 4, 6);
+scene.add(rimMagenta);
+const fillLight = new THREE.PointLight(0xffffff, 0.5, 20);
+fillLight.position.set(0, 6, 2);
+scene.add(fillLight);
+function makeScreenCanvas() {
+    const c = document.createElement('canvas');
+    c.width = 256;
+    c.height = 512;
+    return c;
+}
+function drawScreen(canvas, label, tempC) {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#050505';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = '#00eaff';
+    ctx.lineWidth = 6;
+    ctx.strokeRect(6, 6, canvas.width - 12, canvas.height - 12);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#888';
+    ctx.font = '20px Segoe UI';
+    ctx.fillText(label, canvas.width / 2, 70);
+    const hot = tempC > 90;
+    ctx.fillStyle = hot ? '#ff5050' : '#5ff2ff';
+    ctx.shadowColor = ctx.fillStyle;
+    ctx.shadowBlur = 20;
+    ctx.font = 'bold 46px Consolas, monospace';
+    ctx.fillText(tempC.toFixed(1) + '\u00B0C', canvas.width / 2, 260);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#666';
+    ctx.font = '16px Segoe UI';
+    ctx.fillText('SURFACE TEMPERATURE', canvas.width / 2, 310);
+}
+function makeLabelSprite(text, color) {
+    const c = document.createElement('canvas');
+    c.width = 512;
+    c.height = 128;
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, c.width, c.height);
+    ctx.font = 'bold 46px Segoe UI';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 18;
+    ctx.fillText(text, c.width / 2, c.height / 2);
+    const tex = new THREE.CanvasTexture(c);
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(2.6, 0.65, 1);
+    return sprite;
+}
+function buildPhone(x, qLabel, qKJ) {
+    const group = new THREE.Group();
+    group.position.set(x, 0, 0);
+    const bodyGeo = new THREE.BoxGeometry(1.3, 2.8, 0.22);
+    const bodyMat = new THREE.MeshStandardMaterial({
+        color: 0x5ff2ff, emissive: 0x001a22, metalness: 0.6, roughness: 0.35,
+        transparent: true, opacity: 1
+    });
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    group.add(body);
+    const screenCanvas = makeScreenCanvas();
+    drawScreen(screenCanvas, qLabel, 25.0);
+    const screenTex = new THREE.CanvasTexture(screenCanvas);
+    const screenMat = new THREE.MeshBasicMaterial({ map: screenTex });
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.05, 2.5), screenMat);
+    screen.position.z = 0.115;
+    group.add(screen);
+    const qSprite = makeLabelSprite('Q = ' + qKJ + ' kJ', '#ff3b3b');
+    qSprite.position.set(0, 2.1, 0);
+    group.add(qSprite);
+    const internals = new THREE.Group();
+    internals.visible = false;
+    const frameMat = new THREE.MeshStandardMaterial({ color: 0xd8d8dc, metalness: 0.9, roughness: 0.2 });
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(1.22, 2.72, 0.03), frameMat);
+    frame.position.z = -0.09;
+    internals.add(frame);
+    const batteryMat = new THREE.MeshStandardMaterial({ color: 0x3a3a3e, metalness: 0.3, roughness: 0.7 });
+    const battery = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.05, 0.09), batteryMat);
+    battery.position.set(0, -0.85, -0.02);
+    internals.add(battery);
+    const pcbMat = new THREE.MeshStandardMaterial({ color: 0x14181a, metalness: 0.4, roughness: 0.55 });
+    const pcb = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.15, 0.05), pcbMat);
+    pcb.position.set(0, 0.55, -0.02);
+    internals.add(pcb);
+    const chipMat = new THREE.MeshStandardMaterial({ color: 0xa8a8ac, metalness: 0.8, roughness: 0.3 });
+    const chipLayout = [
+        { x: -0.28, y: 0.85, w: 0.22, h: 0.22 },
+        { x: 0.10, y: 0.85, w: 0.30, h: 0.16 },
+        { x: -0.20, y: 0.45, w: 0.34, h: 0.18 },
+        { x: 0.22, y: 0.35, w: 0.16, h: 0.16 },
+        { x: -0.05, y: 0.10, w: 0.42, h: 0.14 }
+    ];
+    chipLayout.forEach(c => {
+        const chip = new THREE.Mesh(new THREE.BoxGeometry(c.w, c.h, 0.025), chipMat);
+        chip.position.set(c.x, c.y, 0.02);
+        pcb.add(chip);
+    });
+    const traceMat = new THREE.MeshBasicMaterial({ color: 0xc0c0c6 });
+    for (let i = 0; i < 6; i++) {
+        const trace = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.012, 0.01), traceMat);
+        trace.position.set(0, -0.5 + i * 0.18, 0.03);
+        pcb.add(trace);
+    }
+    const cameraMat = new THREE.MeshStandardMaterial({ color: 0xe8e8ec, metalness: 0.95, roughness: 0.15 });
+    const camera3d = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.05, 24), cameraMat);
+    camera3d.rotation.x = Math.PI / 2;
+    camera3d.position.set(0.35, 1.15, -0.02);
+    internals.add(camera3d);
+    group.add(internals);
+    scene.add(group);
+    return { group, body, bodyMat, screen, internals, screenCanvas, screenTex, qLabel, qKJ, temp: 25.0, particles: [] };
+}
+const phoneA = buildPhone(-2.6, 'PHONE A', 10);
+const phoneB = buildPhone(2.6, 'PHONE B', 100);
+function buildEmber(x) {
+    const geo = new THREE.SphereGeometry(0.22, 16, 16);
+    const mat = new THREE.MeshStandardMaterial({ color: 0xff3b3b, emissive: 0xff3b3b, emissiveIntensity: 1.4 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x, -2.3, 0);
+    scene.add(mesh);
+    const light = new THREE.PointLight(0xff3b3b, 1.2, 4);
+    light.position.copy(mesh.position);
+    scene.add(light);
+    return mesh;
+}
+const emberA = buildEmber(-2.6);
+const emberB = buildEmber(2.6);
+function spawnParticle(phone, x) {
+    const geo = new THREE.SphereGeometry(0.06, 8, 8);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xff5050 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x + (Math.random() - 0.5) * 0.3, -2.1, (Math.random() - 0.5) * 0.15);
+    scene.add(mesh);
+    phone.particles.push({ mesh, vy: 0.035 + Math.random() * 0.015 });
+}
+function updateParticles(phone) {
+    for (let i = phone.particles.length - 1; i >= 0; i--) {
+        const p = phone.particles[i];
+        p.mesh.position.y += p.vy;
+        if (p.mesh.position.y > -1.3) {
+            scene.remove(p.mesh);
+            phone.particles.splice(i, 1);
+        }
+    }
+}
+function colorForTemp(t) {
+    const stops = [
+        { t: 25, c: [0x5f, 0xf2, 0xff] },
+        { t: 55, c: [0x88, 0xcc, 0x88] },
+        { t: 90, c: [0xff, 0xb4, 0x00] },
+        { t: 130, c: [0xff, 0x3b, 0x3b] },
+        { t: 175, c: [0xff, 0xff, 0xff] }
+    ];
+    let lo = stops[0], hi = stops[stops.length - 1];
+    for (let i = 0; i < stops.length - 1; i++) {
+        if (t >= stops[i].t && t <= stops[i + 1].t) {
+            lo = stops[i];
+            hi = stops[i + 1];
+            break;
+        }
+    }
+    if (t <= stops[0].t)
+        return stops[0].c;
+    if (t >= stops[stops.length - 1].t)
+        return stops[stops.length - 1].c;
+    const frac = (t - lo.t) / (hi.t - lo.t);
+    const c = lo.c.map((v, i) => Math.round(v + (hi.c[i] - v) * frac));
+    return c;
+}
+function applyTemp(phone) {
+    const [r, g, b] = colorForTemp(phone.temp);
+    phone.bodyMat.color.setRGB(r / 255, g / 255, b / 255);
+    const hotness = Math.max(0, Math.min(1, (phone.temp - 25) / 150));
+    phone.bodyMat.emissive.setRGB(r / 255 * 0.4 * hotness, g / 255 * 0.15 * hotness, b / 255 * 0.1 * hotness);
+    drawScreen(phone.screenCanvas, phone.qLabel, phone.temp);
+    phone.screenTex.needsUpdate = true;
+}
+const BASE_TEMP = 25.0;
+const FINAL_A = 40.0;
+const FINAL_B = 175.0;
+let heating = false;
+let heatStart = 0;
+const HEAT_DURATION = 4200;
+let spawnAcc = { a: 0, b: 0 };
+function easeOutCubic(x) { return 1 - Math.pow(1 - x, 3); }
+function startHeating() {
+    if (heating)
+        return;
+    heating = true;
+    heatStart = performance.now();
+    btnHeat.disabled = true;
+    resultEl.classList.remove('show');
+}
+function resetAll() {
+    heating = false;
+    btnHeat.disabled = false;
+    resultEl.classList.remove('show');
+    phoneA.temp = BASE_TEMP;
+    phoneB.temp = BASE_TEMP;
+    applyTemp(phoneA);
+    applyTemp(phoneB);
+    [phoneA, phoneB].forEach(p => {
+        p.particles.forEach(pt => scene.remove(pt.mesh));
+        p.particles = [];
+    });
+}
+btnHeat.addEventListener('click', startHeating);
+btnReset.addEventListener('click', resetAll);
+let showingInner = false;
+function toggleInnerView() {
+    showingInner = !showingInner;
+    [phoneA, phoneB].forEach(p => {
+        p.bodyMat.opacity = showingInner ? 0.12 : 1;
+        p.screen.visible = !showingInner;
+        p.internals.visible = showingInner;
+    });
+    btnInner.textContent = showingInner ? 'Hide Inner Components' : 'Show Inner Components';
+}
+btnInner.addEventListener('click', toggleInnerView);
+function animate(now) {
+    requestAnimationFrame(animate);
+    controls.update();
+    if (heating) {
+        const elapsed = now - heatStart;
+        const p = Math.min(1, elapsed / HEAT_DURATION);
+        const eased = easeOutCubic(p);
+        phoneA.temp = BASE_TEMP + (FINAL_A - BASE_TEMP) * eased;
+        phoneB.temp = BASE_TEMP + (FINAL_B - BASE_TEMP) * eased;
+        applyTemp(phoneA);
+        applyTemp(phoneB);
+        spawnAcc.a += 16.6;
+        spawnAcc.b += 16.6;
+        if (spawnAcc.a > 300) {
+            spawnParticle(phoneA, -2.6);
+            spawnAcc.a = 0;
+        }
+        if (spawnAcc.b > 30) {
+            spawnParticle(phoneB, 2.6);
+            spawnAcc.b = 0;
+        }
+        if (p >= 1) {
+            heating = false;
+            spawnAcc = { a: 0, b: 0 };
+            resultEl.innerHTML = 'Both phones have the <b>same mass</b> and are made of the same material, but Phone B absorbed <b>10&times;</b> the heat energy of Phone A &mdash; and its temperature rose <b>10&times; more</b>, from 25&deg;C to 175&deg;C, while Phone A only reached 40&deg;C.';
+            resultEl.classList.add('show');
+        }
+    }
+    updateParticles(phoneA);
+    updateParticles(phoneB);
+    emberA.rotation.y += 0.01;
+    emberB.rotation.y += 0.01;
+    renderer.render(scene, camera);
+}
+applyTemp(phoneA);
+applyTemp(phoneB);
+requestAnimationFrame(animate);
+</script>
+
+</body>
+</html>

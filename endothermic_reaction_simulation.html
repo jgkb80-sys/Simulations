@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="robots" content="noindex, nofollow, noarchive">
+<script>
+(function(){
+  document.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+  document.addEventListener('keydown', function(e){
+    var k = e.key;
+    var blockedKey = (k === 'F12');
+    var blockedCombo = (e.ctrlKey || e.metaKey) && (
+      k === 'u' || k === 'U' ||
+      k === 's' || k === 'S' ||
+      (e.shiftKey && (k === 'i' || k === 'I' || k === 'j' || k === 'J' || k === 'c' || k === 'C'))
+    );
+    if (blockedKey || blockedCombo) e.preventDefault();
+  });
+})();
+</script>
+<meta charset="UTF-8">
+<title>Endothermic Reaction — Dissolving Ammonium Nitrate</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #000;
+    height: 100%;
+    overflow: hidden;
+    font-family: 'Segoe UI', Arial, sans-serif;
+  }
+
+  #stage {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    background: #000;
+  }
+
+  .title {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #fff;
+    font-size: 22px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    text-shadow: 0 0 8px #0ff, 0 0 18px #0ff;
+  }
+
+  #equation {
+    position: absolute;
+    top: 58px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 17px;
+    letter-spacing: 1px;
+    white-space: nowrap;
+    color: #f4f4f4;
+    text-shadow: 0 0 6px rgba(255,255,255,0.4);
+  }
+
+  #equation .solute { color: #f4f4f4; text-shadow: 0 0 6px #f4f4f4; }
+  #equation .reactantB { color: #cfcfcf; text-shadow: 0 0 6px #cfcfcf; }
+  #equation .cold { color: #3aa8ff; text-shadow: 0 0 6px #3aa8ff; }
+
+  .arrowWithSolvent {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    vertical-align: middle;
+    margin: 0 6px;
+    line-height: 1;
+  }
+
+  .solventLabel {
+    font-size: 12px;
+    color: #5ff2ff;
+    text-shadow: 0 0 6px #5ff2ff;
+    margin-bottom: 1px;
+  }
+
+  .arrowGlyph {
+    font-size: 18px;
+    color: #f4f4f4;
+  }
+
+  #banner {
+    position: absolute;
+    top: 90px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 13px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #3aa8ff;
+    text-shadow: 0 0 8px #3aa8ff;
+    opacity: 0;
+    transition: opacity 0.5s;
+    white-space: nowrap;
+  }
+
+  #canvasWrap {
+    position: absolute;
+    top: 52%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  canvas {
+    display: block;
+  }
+
+  #legend {
+    position: absolute;
+    bottom: 26px;
+    left: 24px;
+    z-index: 10;
+    background: rgba(10, 10, 10, 0.55);
+    border: 1px solid #3aa8ff;
+    border-radius: 10px;
+    padding: 10px 16px;
+    box-shadow: 0 0 10px rgba(58,168,255,0.4);
+  }
+
+  .legendTitle {
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #888;
+    margin-bottom: 6px;
+  }
+
+  .legendRow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 4px;
+  }
+
+  .legendDot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .legendText {
+    font-size: 12px;
+    letter-spacing: 1px;
+    color: #ddd;
+    white-space: nowrap;
+  }
+
+  #controls {
+    position: absolute;
+    bottom: 26px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 22px;
+    z-index: 10;
+  }
+
+  button {
+    font-family: inherit;
+    font-size: 14px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 12px 22px;
+    border-radius: 10px;
+    background: #050505;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  #btnStart {
+    color: #3aa8ff;
+    border: 2px solid #3aa8ff;
+    box-shadow: 0 0 10px rgba(58,168,255,0.5);
+  }
+  #btnStart:hover { background: rgba(58,168,255,0.12); box-shadow: 0 0 20px #3aa8ff; }
+
+  #btnStop {
+    color: #00eaff;
+    border: 2px solid #00eaff;
+    box-shadow: 0 0 10px rgba(0,234,255,0.4);
+  }
+  #btnStop:hover { background: rgba(0,234,255,0.12); box-shadow: 0 0 20px #00eaff; }
+
+  #btnReset {
+    color: #999;
+    border: 2px solid #555;
+  }
+  #btnReset:hover { color: #fff; border-color: #fff; box-shadow: 0 0 12px #fff; }
+
+  button:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="title">Endothermic Reaction — Dissolving Ammonium Nitrate</div>
+  <div id="equation">
+    <span class="solute">NH&#8324;NO&#8323; (s)</span> + <span class="cold">Heat (Q)</span>
+    <span class="arrowWithSolvent"><span class="solventLabel">H&#8322;O</span><span class="arrowGlyph">&rarr;</span></span>
+    NH&#8324;&#8314; (aq) + NO&#8323;&#8315; (aq)
+  </div>
+  <div id="banner"></div>
+
+  <div id="legend">
+    <div class="legendTitle">Legend</div>
+    <div class="legendRow"><span class="legendDot" style="background:#f4f4f4; box-shadow:0 0 6px #f4f4f4; border-radius:3px;"></span><span class="legendText">NH&#8324;NO&#8323; (s) &mdash; solid crystal</span></div>
+    <div class="legendRow"><span class="legendDot" style="background:#5ff2ff; box-shadow:0 0 6px #5ff2ff;"></span><span class="legendText">H&#8322;O &mdash; solvent (drawn into equation via arrow)</span></div>
+    <div class="legendRow"><span class="legendDot" style="background:#7dffb0; box-shadow:0 0 6px #7dffb0;"></span><span class="legendText">NH&#8324;&#8314; / NO&#8323;&#8315; ions (aq, product)</span></div>
+    <div class="legendRow"><span class="legendDot" style="background:#3aa8ff; box-shadow:0 0 6px #3aa8ff;"></span><span class="legendText">+Q &mdash; heat absorbed (a reactant)</span></div>
+  </div>
+
+  <div id="canvasWrap">
+    <canvas id="canvas" width="760" height="600"></canvas>
+  </div>
+
+  <div id="controls">
+    <button id="btnStart">Start Reaction</button>
+    <button id="btnStop">Stop</button>
+    <button id="btnReset">Reset</button>
+  </div>
+</div>
+
+<script>"use strict";
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const banner = document.getElementById('banner');
+const btnStart = document.getElementById('btnStart');
+const btnStop = document.getElementById('btnStop');
+const btnReset = document.getElementById('btnReset');
+const BEAKER = { left: 140, right: 430, rimY: 150, bottomY: 520, cornerR: 26 };
+const LIQUID_TOP = 215;
+const LIQUID_BOTTOM = 500;
+const LIQUID_LEFT = BEAKER.left + 14;
+const LIQUID_RIGHT = BEAKER.right - 14;
+const PROBE_X = 405;
+const PROBE_TOP_Y = 150;
+const PROBE_TIP_Y = 430;
+const LCD_BOX = { x: 480, y: 60, w: 190, h: 92 };
+const BASE_TEMP = 25.0;
+const MIN_TEMP = 3.0;
+let waterMolecules = [];
+let crystalUnits = [];
+let ions = [];
+let effects = [];
+let floaters = [];
+let temp = BASE_TEMP;
+let running = false;
+let rafId = null;
+const WATER_COUNT = 34;
+const CRYSTAL_GRID = 4;
+const CRYSTAL_UNIT_SIZE = 13;
+const CRYSTAL_GAP = 3;
+function rand(a, b) { return a + Math.random() * (b - a); }
+function fmtTemp(t) { return t.toFixed(1) + '\u00B0C'; }
+function fillSolution() {
+    waterMolecules = [];
+    crystalUnits = [];
+    ions = [];
+    for (let i = 0; i < WATER_COUNT; i++) {
+        waterMolecules.push({
+            x: rand(LIQUID_LEFT + 10, LIQUID_RIGHT - 10),
+            y: rand(LIQUID_TOP + 10, LIQUID_BOTTOM - 10),
+            vx: 0,
+            vy: 0,
+            r: 4.5
+        });
+    }
+    const step = CRYSTAL_UNIT_SIZE + CRYSTAL_GAP;
+    const spread = (CRYSTAL_GRID - 1) * step;
+    const cx = (LIQUID_LEFT + LIQUID_RIGHT) / 2;
+    const cy = LIQUID_BOTTOM - 70;
+    for (let row = 0; row < CRYSTAL_GRID; row++) {
+        for (let col = 0; col < CRYSTAL_GRID; col++) {
+            crystalUnits.push({
+                x: cx - spread / 2 + col * step,
+                y: cy - spread / 2 + row * step,
+                alive: true
+            });
+        }
+    }
+}
+function activateParticles() {
+    for (const w of waterMolecules) {
+        const speed = rand(0.4, 0.8);
+        const ang = rand(0, Math.PI * 2);
+        w.vx = Math.cos(ang) * speed;
+        w.vy = Math.sin(ang) * speed;
+    }
+}
+function updateParticles() {
+    for (const w of waterMolecules) {
+        w.x += w.vx;
+        w.y += w.vy;
+        if (w.x - w.r < LIQUID_LEFT) {
+            w.x = LIQUID_LEFT + w.r;
+            w.vx *= -1;
+        }
+        if (w.x + w.r > LIQUID_RIGHT) {
+            w.x = LIQUID_RIGHT - w.r;
+            w.vx *= -1;
+        }
+        if (w.y - w.r < LIQUID_TOP) {
+            w.y = LIQUID_TOP + w.r;
+            w.vy *= -1;
+        }
+        if (w.y + w.r > LIQUID_BOTTOM) {
+            w.y = LIQUID_BOTTOM - w.r;
+            w.vy *= -1;
+        }
+    }
+    for (const ion of ions) {
+        ion.x += ion.vx;
+        ion.y += ion.vy;
+        if (ion.x - ion.r < LIQUID_LEFT) {
+            ion.x = LIQUID_LEFT + ion.r;
+            ion.vx *= -1;
+        }
+        if (ion.x + ion.r > LIQUID_RIGHT) {
+            ion.x = LIQUID_RIGHT - ion.r;
+            ion.vx *= -1;
+        }
+        if (ion.y - ion.r < LIQUID_TOP) {
+            ion.y = LIQUID_TOP + ion.r;
+            ion.vy *= -1;
+        }
+        if (ion.y + ion.r > LIQUID_BOTTOM) {
+            ion.y = LIQUID_BOTTOM - ion.r;
+            ion.vy *= -1;
+        }
+    }
+}
+function handleCollisions() {
+    const usedWater = new Set();
+    for (const unit of crystalUnits) {
+        if (!unit.alive)
+            continue;
+        for (let i = 0; i < waterMolecules.length; i++) {
+            if (usedWater.has(i))
+                continue;
+            const w = waterMolecules[i];
+            const dx = w.x - unit.x, dy = w.y - unit.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < CRYSTAL_UNIT_SIZE / 2 + w.r + 2) {
+                usedWater.add(i);
+                unit.alive = false;
+                solvate(unit.x, unit.y);
+                break;
+            }
+        }
+    }
+    if (usedWater.size) {
+        waterMolecules = waterMolecules.filter((_, idx) => !usedWater.has(idx));
+    }
+}
+function solvate(x, y) {
+    effects.push({ x, y, radius: 4, life: 1 });
+    floaters.push({ x, y: y - 6, life: 1, text: '+Q' });
+    ions.push({ x, y, vx: rand(-1.2, -0.3), vy: rand(-1.0, 1.0), r: 4 });
+    ions.push({ x, y, vx: rand(0.3, 1.2), vy: rand(-1.0, 1.0), r: 4 });
+    const headroom = (temp - MIN_TEMP) / (BASE_TEMP - MIN_TEMP);
+    temp = Math.max(MIN_TEMP, temp - 0.9 * headroom);
+}
+function updateEffects() {
+    effects.forEach(e => { e.radius += 1.6; e.life -= 0.035; });
+    effects = effects.filter(e => e.life > 0);
+    floaters.forEach(f => { f.y += 0.6; f.life -= 0.02; });
+    floaters = floaters.filter(f => f.life > 0);
+}
+function drawBeaker() {
+    const { left, right, rimY, bottomY, cornerR } = BEAKER;
+    ctx.save();
+    ctx.strokeStyle = '#00eaff';
+    ctx.lineWidth = 3;
+    ctx.shadowColor = '#00eaff';
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.moveTo(left, rimY);
+    ctx.lineTo(left, bottomY - cornerR);
+    ctx.quadraticCurveTo(left, bottomY, left + cornerR, bottomY);
+    ctx.lineTo(right - cornerR, bottomY);
+    ctx.quadraticCurveTo(right, bottomY, right, bottomY - cornerR);
+    ctx.lineTo(right, rimY);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(left - 8, rimY - 10);
+    ctx.lineTo(left, rimY);
+    ctx.moveTo(right + 8, rimY - 10);
+    ctx.lineTo(right, rimY);
+    ctx.stroke();
+    ctx.restore();
+    ctx.save();
+    const grad = ctx.createLinearGradient(0, LIQUID_TOP, 0, LIQUID_BOTTOM);
+    grad.addColorStop(0, 'rgba(0,234,255,0.16)');
+    grad.addColorStop(1, 'rgba(58,168,255,0.10)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(left + 3, LIQUID_TOP);
+    ctx.lineTo(left + 3, bottomY - cornerR);
+    ctx.quadraticCurveTo(left + 3, bottomY - 3, left + cornerR, bottomY - 3);
+    ctx.lineTo(right - cornerR, bottomY - 3);
+    ctx.quadraticCurveTo(right - 3, bottomY - 3, right - 3, bottomY - cornerR);
+    ctx.lineTo(right - 3, LIQUID_TOP);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,234,255,0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = '#00eaff';
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.moveTo(left + 3, LIQUID_TOP);
+    ctx.lineTo(right - 3, LIQUID_TOP);
+    ctx.stroke();
+    ctx.restore();
+}
+function drawThermometer() {
+    ctx.save();
+    ctx.strokeStyle = '#888';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(PROBE_X, PROBE_TOP_Y - 4);
+    ctx.lineTo(PROBE_X + 30, LCD_BOX.y + LCD_BOX.h / 2 - 10);
+    ctx.lineTo(LCD_BOX.x, LCD_BOX.y + LCD_BOX.h / 2 - 10);
+    ctx.stroke();
+    const coldFrac = Math.max(0, Math.min(1, (BASE_TEMP - temp) / (BASE_TEMP - MIN_TEMP)));
+    const probeColor = coldFrac > 0.5 ? '#3aa8ff' : '#f4f4f4';
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(PROBE_X, PROBE_TOP_Y);
+    ctx.lineTo(PROBE_X, PROBE_TIP_Y);
+    ctx.stroke();
+    const fillTopY = PROBE_TIP_Y - (PROBE_TIP_Y - (PROBE_TOP_Y + 20)) * (1 - coldFrac);
+    ctx.strokeStyle = probeColor;
+    ctx.shadowColor = probeColor;
+    ctx.shadowBlur = 8;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(PROBE_X, fillTopY);
+    ctx.lineTo(PROBE_X, PROBE_TIP_Y - 6);
+    ctx.stroke();
+    ctx.fillStyle = probeColor;
+    ctx.beginPath();
+    ctx.arc(PROBE_X, PROBE_TIP_Y, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    ctx.save();
+    ctx.fillStyle = '#0a0a0a';
+    ctx.strokeStyle = '#00eaff';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = '#00eaff';
+    ctx.shadowBlur = 8;
+    roundRect(ctx, LCD_BOX.x, LCD_BOX.y, LCD_BOX.w, LCD_BOX.h, 10);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    ctx.save();
+    ctx.font = '10px Segoe UI';
+    ctx.fillStyle = '#888';
+    ctx.textAlign = 'center';
+    ctx.fillText('DIGITAL THERMOMETER', LCD_BOX.x + LCD_BOX.w / 2, LCD_BOX.y + 18);
+    ctx.restore();
+    ctx.save();
+    ctx.font = 'bold 30px Consolas, "Courier New", monospace';
+    ctx.textAlign = 'center';
+    const readoutColor = coldFrac > 0.5 ? '#3aa8ff' : '#5ff2ff';
+    ctx.fillStyle = readoutColor;
+    ctx.shadowColor = readoutColor;
+    ctx.shadowBlur = 10;
+    ctx.fillText(fmtTemp(temp), LCD_BOX.x + LCD_BOX.w / 2, LCD_BOX.y + 58);
+    ctx.restore();
+    ctx.save();
+    ctx.font = '10px Segoe UI';
+    ctx.fillStyle = '#888';
+    ctx.textAlign = 'center';
+    ctx.fillText('SOLUTION TEMPERATURE', LCD_BOX.x + LCD_BOX.w / 2, LCD_BOX.y + 78);
+    ctx.restore();
+}
+function drawCrystal() {
+    for (const unit of crystalUnits) {
+        if (!unit.alive)
+            continue;
+        ctx.save();
+        ctx.fillStyle = '#f4f4f4';
+        ctx.shadowColor = '#f4f4f4';
+        ctx.shadowBlur = 8;
+        const s = CRYSTAL_UNIT_SIZE;
+        ctx.fillRect(unit.x - s / 2, unit.y - s / 2, s, s);
+        ctx.restore();
+    }
+}
+function drawWater() {
+    for (const w of waterMolecules) {
+        ctx.save();
+        ctx.fillStyle = '#5ff2ff';
+        ctx.shadowColor = '#5ff2ff';
+        ctx.shadowBlur = 7;
+        ctx.beginPath();
+        ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+function drawIons() {
+    for (const ion of ions) {
+        ctx.save();
+        ctx.fillStyle = '#7dffb0';
+        ctx.shadowColor = '#7dffb0';
+        ctx.shadowBlur = 9;
+        ctx.beginPath();
+        ctx.arc(ion.x, ion.y, ion.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+function drawEffects() {
+    for (const e of effects) {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, e.life);
+        ctx.strokeStyle = '#3aa8ff';
+        ctx.shadowColor = '#3aa8ff';
+        ctx.shadowBlur = 12;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+    }
+    for (const f of floaters) {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, f.life);
+        ctx.font = 'bold 14px Georgia, serif';
+        ctx.fillStyle = '#3aa8ff';
+        ctx.shadowColor = '#3aa8ff';
+        ctx.shadowBlur = 8;
+        ctx.textAlign = 'center';
+        ctx.fillText(f.text, f.x, f.y);
+        ctx.restore();
+    }
+}
+function roundRect(c, x, y, w, h, r) {
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
+}
+function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawBeaker();
+    drawWater();
+    drawCrystal();
+    drawIons();
+    drawEffects();
+    drawThermometer();
+}
+function loop() {
+    if (running) {
+        updateParticles();
+        handleCollisions();
+        if (crystalUnits.every(u => !u.alive)) {
+            running = false;
+            btnStart.disabled = true;
+            banner.textContent = 'Crystal fully dissolved \u2014 press Reset to try again';
+        }
+    }
+    updateEffects();
+    render();
+    rafId = requestAnimationFrame(loop);
+}
+function startReaction() {
+    if (running)
+        return;
+    running = true;
+    btnStart.disabled = true;
+    activateParticles();
+    banner.textContent = 'Reaction in progress \u2014 heat consumed as a reactant on each collision';
+    banner.style.opacity = '1';
+}
+function stopReaction() {
+    running = false;
+    btnStart.disabled = false;
+    banner.style.opacity = '0';
+}
+function resetSim() {
+    running = false;
+    btnStart.disabled = false;
+    effects = [];
+    floaters = [];
+    temp = BASE_TEMP;
+    banner.style.opacity = '0';
+    fillSolution();
+}
+btnStart.addEventListener('click', startReaction);
+btnStop.addEventListener('click', stopReaction);
+btnReset.addEventListener('click', resetSim);
+fillSolution();
+render();
+loop();
+</script>
+
+</body>
+</html>

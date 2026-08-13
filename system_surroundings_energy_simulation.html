@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="robots" content="noindex, nofollow, noarchive">
+<script>
+(function(){
+  document.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+  document.addEventListener('keydown', function(e){
+    var k = e.key;
+    var blockedKey = (k === 'F12');
+    var blockedCombo = (e.ctrlKey || e.metaKey) && (
+      k === 'u' || k === 'U' ||
+      k === 's' || k === 'S' ||
+      (e.shiftKey && (k === 'i' || k === 'I' || k === 'j' || k === 'J' || k === 'c' || k === 'C'))
+    );
+    if (blockedKey || blockedCombo) e.preventDefault();
+  });
+})();
+</script>
+<meta charset="UTF-8">
+<title>System & Surroundings — Heat Transfer</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #000;
+    height: 100%;
+    overflow: hidden;
+    font-family: 'Segoe UI', Arial, sans-serif;
+  }
+
+  #stage {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    background: #000;
+  }
+
+  .title {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #fff;
+    font-size: 22px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    text-shadow: 0 0 8px #0ff, 0 0 18px #0ff;
+  }
+
+  #banner {
+    position: absolute;
+    top: 62px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 15px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    opacity: 0;
+    transition: opacity 0.5s;
+    white-space: nowrap;
+  }
+
+  #arena {
+    position: absolute;
+    top: 52%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 680px;
+    height: 560px;
+  }
+
+  svg {
+    position: absolute;
+    inset: 0;
+    overflow: visible;
+  }
+
+  .surrLabel {
+    position: absolute;
+    top: 26px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 18px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #00eaff;
+    text-shadow: 0 0 8px #00eaff;
+  }
+
+  .sysLabel {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 18px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #ff2fd6;
+    text-shadow: 0 0 8px #ff2fd6;
+    text-align: center;
+    pointer-events: none;
+  }
+
+  /* Temperature reading lives only in the surroundings — placed in the open
+     gap between the two ovals, offset from center so it never collides with
+     the oval boundaries or the vertical heat arrow, with its own panel for
+     strong contrast/legibility. */
+  #surrReadout {
+    position: absolute;
+    top: 410px;
+    left: 62%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: rgba(10, 10, 10, 0.65);
+    border: 1px solid #00eaff;
+    border-radius: 12px;
+    padding: 12px 22px;
+    box-shadow: 0 0 12px rgba(0,234,255,0.35);
+    z-index: 8;
+  }
+
+  .lcd {
+    background: #0a0a0a;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 8px 20px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 30px;
+    letter-spacing: 2px;
+    min-width: 140px;
+    text-align: center;
+    color: #5ff2ff;
+    text-shadow: 0 0 10px #00eaff;
+  }
+
+  .temp-caption {
+    margin-top: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #b8f1ff;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    text-shadow: 0 0 6px rgba(0, 234, 255, 0.5);
+  }
+
+  /* ---------- Controls ---------- */
+  #legend {
+    position: absolute;
+    bottom: 26px;
+    left: 24px;
+    z-index: 10;
+    background: rgba(10, 10, 10, 0.55);
+    border: 1px solid #ff2b2b;
+    border-radius: 10px;
+    padding: 10px 16px;
+    box-shadow: 0 0 10px rgba(255,43,43,0.4);
+  }
+
+  .legendTitle {
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #888;
+    margin-bottom: 6px;
+  }
+
+  .legendRow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 4px;
+  }
+
+  .legendSymbol {
+    font-family: Georgia, serif;
+    font-weight: bold;
+    font-size: 16px;
+    color: #ff2b2b;
+    text-shadow: 0 0 6px #ff2b2b;
+    min-width: 22px;
+    text-align: center;
+  }
+
+  .legendText {
+    font-size: 12px;
+    letter-spacing: 1px;
+    color: #ddd;
+    white-space: nowrap;
+  }
+
+  #controls {
+    position: absolute;
+    bottom: 26px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 26px;
+    z-index: 10;
+  }
+
+  button {
+    font-family: inherit;
+    font-size: 14px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 12px 24px;
+    border-radius: 10px;
+    background: #050505;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  #btnExo {
+    color: #ffb400;
+    border: 2px solid #ffb400;
+    box-shadow: 0 0 10px rgba(255,180,0,0.5);
+  }
+  #btnExo:hover { background: rgba(255,180,0,0.12); box-shadow: 0 0 20px #ffb400; }
+
+  #btnEndo {
+    color: #7dffb0;
+    border: 2px solid #7dffb0;
+    box-shadow: 0 0 10px rgba(125,255,176,0.5);
+  }
+  #btnEndo:hover { background: rgba(125,255,176,0.12); box-shadow: 0 0 20px #7dffb0; }
+
+  #btnReset {
+    color: #999;
+    border: 2px solid #555;
+  }
+  #btnReset:hover { color: #fff; border-color: #fff; box-shadow: 0 0 12px #fff; }
+
+  button:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="title">System &amp; Surroundings — Heat Transfer</div>
+  <div id="banner"></div>
+
+  <div id="legend">
+    <div class="legendTitle">Legend</div>
+    <div class="legendRow"><span class="legendSymbol">Q</span><span class="legendText">Heat Energy</span></div>
+    <div class="legendRow"><span class="legendSymbol">PE</span><span class="legendText">Potential Energy</span></div>
+  </div>
+
+  <div id="arena">
+    <svg id="svgArena" width="680" height="560" viewBox="0 0 680 560">
+      <defs>
+        <filter id="glowCyan" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="4" result="blur"/>
+          <feMerge>
+            <feMergeNode in="blur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+        <filter id="glowMagenta" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="4" result="blur"/>
+          <feMerge>
+            <feMergeNode in="blur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+        <filter id="glowRed" x="-100%" y="-100%" width="300%" height="300%">
+          <feGaussianBlur stdDeviation="3" result="blur"/>
+          <feMerge>
+            <feMergeNode in="blur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+      </defs>
+
+      <!-- Surroundings (outer oval) -->
+      <ellipse id="surrEllipse" cx="340" cy="280" rx="300" ry="230"
+        fill="rgba(255,255,255,0.02)" stroke="#00eaff" stroke-width="3"
+        filter="url(#glowCyan)"/>
+
+      <!-- System (inner oval) -->
+      <ellipse id="sysEllipse" cx="340" cy="280" rx="140" ry="100"
+        fill="#020202" stroke="#ff2fd6" stroke-width="3"
+        filter="url(#glowMagenta)"/>
+
+      <!-- Wavy Q heat arrows get injected here -->
+      <g id="arrowLayer"></g>
+    </svg>
+
+    <div class="surrLabel">Surroundings</div>
+    <div class="sysLabel">System</div>
+
+    <div id="surrReadout">
+      <div class="lcd" id="surrTemp">25.0°C</div>
+      <div class="temp-caption">surroundings temperature</div>
+    </div>
+  </div>
+
+  <div id="controls">
+    <button id="btnExo">Exothermic</button>
+    <button id="btnEndo">Endothermic</button>
+    <button id="btnReset">Reset</button>
+  </div>
+</div>
+
+<script>"use strict";
+const surrEllipse = document.getElementById('surrEllipse');
+const sysEllipse = document.getElementById('sysEllipse');
+const arrowLayer = document.getElementById('arrowLayer');
+const surrTempEl = document.getElementById('surrTemp');
+const banner = document.getElementById('banner');
+const btnExo = document.getElementById('btnExo');
+const btnEndo = document.getElementById('btnEndo');
+const btnReset = document.getElementById('btnReset');
+const BASE_TEMP = 25.0;
+let surrTemp = BASE_TEMP;
+let animFrame = null;
+let waveFrame = null;
+let mode = null;
+const CX = 340, CY = 280;
+const RX_IN = 140, RY_IN = 100;
+const RX_OUT = 300, RY_OUT = 230;
+const NUM_ARROWS = 8;
+const RED = '#ff2b2b';
+function fmt(t) { return t.toFixed(1) + '°C'; }
+function renderTemp() { surrTempEl.textContent = fmt(surrTemp); }
+const NEUTRAL_STROKE = [0, 234, 255];
+const HOT_STROKE = [255, 42, 42];
+const COLD_STROKE = [58, 150, 255];
+const NEUTRAL_FILL_A = 0.02;
+const HOT_FILL = [255, 42, 42];
+const COLD_FILL = [58, 150, 255];
+function lerp(a, b, t) { return a + (b - a) * t; }
+function rgbToStr(rgb, a) { return `rgba(${Math.round(rgb[0])}, ${Math.round(rgb[1])}, ${Math.round(rgb[2])}, ${a})`; }
+function setSurroundingsColor(t, targetMode) {
+    let target = targetMode === 'exo' ? HOT_STROKE : targetMode === 'endo' ? COLD_STROKE : NEUTRAL_STROKE;
+    const stroke = [
+        lerp(NEUTRAL_STROKE[0], target[0], t),
+        lerp(NEUTRAL_STROKE[1], target[1], t),
+        lerp(NEUTRAL_STROKE[2], target[2], t)
+    ];
+    surrEllipse.setAttribute('stroke', rgbToStr(stroke, 1));
+    const fillTarget = targetMode === 'exo' ? HOT_FILL : targetMode === 'endo' ? COLD_FILL : null;
+    if (fillTarget) {
+        const fillAlpha = lerp(NEUTRAL_FILL_A, 0.16, t);
+        surrEllipse.setAttribute('fill', rgbToStr(fillTarget, fillAlpha));
+    }
+    else {
+        surrEllipse.setAttribute('fill', `rgba(255,255,255,${NEUTRAL_FILL_A})`);
+    }
+}
+function setOvalGlow(m) {
+    sysEllipse.setAttribute('stroke', '#ff2fd6');
+    if (!m)
+        setSurroundingsColor(0, null);
+}
+function ellipsePoint(rx, ry, angle) {
+    return { x: CX + rx * Math.cos(angle), y: CY + ry * Math.sin(angle) };
+}
+const arrows = [];
+for (let i = 0; i < NUM_ARROWS; i++) {
+    const angle = (Math.PI * 2 / NUM_ARROWS) * i;
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.style.opacity = '0';
+    g.style.transition = 'opacity 0.4s';
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', RED);
+    path.setAttribute('stroke-width', '2.5');
+    path.setAttribute('filter', 'url(#glowRed)');
+    const head = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    head.setAttribute('fill', RED);
+    head.setAttribute('filter', 'url(#glowRed)');
+    const peLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    peLabel.textContent = 'PE';
+    peLabel.setAttribute('fill', RED);
+    peLabel.setAttribute('font-size', '18');
+    peLabel.setAttribute('font-weight', 'bold');
+    peLabel.setAttribute('font-family', 'Georgia, serif');
+    peLabel.setAttribute('text-anchor', 'middle');
+    peLabel.setAttribute('dominant-baseline', 'middle');
+    peLabel.setAttribute('filter', 'url(#glowRed)');
+    const qLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    qLabel.textContent = 'Q';
+    qLabel.setAttribute('fill', RED);
+    qLabel.setAttribute('font-size', '20');
+    qLabel.setAttribute('font-weight', 'bold');
+    qLabel.setAttribute('font-family', 'Georgia, serif');
+    qLabel.setAttribute('text-anchor', 'middle');
+    qLabel.setAttribute('dominant-baseline', 'middle');
+    qLabel.setAttribute('filter', 'url(#glowRed)');
+    g.appendChild(path);
+    g.appendChild(head);
+    g.appendChild(peLabel);
+    g.appendChild(qLabel);
+    arrowLayer.appendChild(g);
+    arrows.push({ angle, g, path, head, peLabel, qLabel });
+}
+function buildWavyPath(start, end, phase, amplitude, waves) {
+    const segX = end.x - start.x;
+    const segY = end.y - start.y;
+    const len = Math.sqrt(segX * segX + segY * segY);
+    const dirX = segX / len, dirY = segY / len;
+    const perpX = -dirY, perpY = dirX;
+    const steps = 24;
+    let d = '';
+    const pts = [];
+    for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        const baseX = start.x + dirX * len * t;
+        const baseY = start.y + dirY * len * t;
+        const taper = Math.sin(Math.PI * t);
+        const off = amplitude * taper * Math.sin(t * waves * Math.PI * 2 + phase);
+        const px = baseX + perpX * off;
+        const py = baseY + perpY * off;
+        pts.push({ x: px, y: py });
+    }
+    d = 'M ' + pts.map(p => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' L ');
+    return { d, dirX, dirY, tipBefore: pts[pts.length - 2], tip: pts[pts.length - 1] };
+}
+function updateArrows(phase) {
+    arrows.forEach(a => {
+        const insideSystem = ellipsePoint(RX_IN * 0.5, RY_IN * 0.5, a.angle);
+        const insideSurroundings = ellipsePoint(RX_IN + (RX_OUT - RX_IN) * 0.6, RY_IN + (RY_OUT - RY_IN) * 0.6, a.angle);
+        let start, end;
+        if (mode === 'exo') {
+            start = insideSystem;
+            end = insideSurroundings;
+        }
+        else if (mode === 'endo') {
+            start = insideSurroundings;
+            end = insideSystem;
+        }
+        else {
+            return;
+        }
+        const { d, dirX, dirY, tipBefore, tip } = buildWavyPath(start, end, phase, 9, 2.4);
+        a.path.setAttribute('d', d);
+        const hdx = tip.x - tipBefore.x, hdy = tip.y - tipBefore.y;
+        const hlen = Math.sqrt(hdx * hdx + hdy * hdy) || 1;
+        const ux = hdx / hlen, uy = hdy / hlen;
+        const px = -uy, py = ux;
+        const headLen = 12, headWidth = 7;
+        const tipPt = tip;
+        const backCenter = { x: tip.x - ux * headLen, y: tip.y - uy * headLen };
+        const left = { x: backCenter.x + px * headWidth, y: backCenter.y + py * headWidth };
+        const right = { x: backCenter.x - px * headWidth, y: backCenter.y - py * headWidth };
+        a.head.setAttribute('points', `${tipPt.x},${tipPt.y} ${left.x},${left.y} ${right.x},${right.y}`);
+        const rux = Math.cos(a.angle), ruy = Math.sin(a.angle);
+        const peX = insideSystem.x - rux * 14;
+        const peY = insideSystem.y - ruy * 14;
+        a.peLabel.setAttribute('x', peX);
+        a.peLabel.setAttribute('y', peY);
+        const qX = insideSurroundings.x + rux * 16;
+        const qY = insideSurroundings.y + ruy * 16;
+        a.qLabel.setAttribute('x', qX);
+        a.qLabel.setAttribute('y', qY);
+    });
+}
+function animateWaves(ts) {
+    const phase = ts / 400;
+    updateArrows(phase);
+    waveFrame = requestAnimationFrame(animateWaves);
+}
+function showArrows(m) {
+    mode = m;
+    arrows.forEach(a => { a.g.style.opacity = m ? '1' : '0'; });
+    if (m && !waveFrame) {
+        waveFrame = requestAnimationFrame(animateWaves);
+    }
+    else if (!m && waveFrame) {
+        cancelAnimationFrame(waveFrame);
+        waveFrame = null;
+    }
+}
+function stopAll() {
+    showArrows(null);
+    banner.style.opacity = '0';
+}
+function setButtonsDisabled(disabled) {
+    btnExo.disabled = disabled;
+    btnEndo.disabled = disabled;
+}
+function runExothermic() {
+    stopAll();
+    setOvalGlow('exo');
+    setButtonsDisabled(true);
+    showArrows('exo');
+    banner.textContent = 'Exothermic Reaction — heat (Q) released from system to surroundings';
+    banner.style.color = '#ffb400';
+    banner.style.textShadow = '0 0 8px #ffb400';
+    banner.style.opacity = '1';
+    animateTemp(BASE_TEMP + 10, 'exo', () => setButtonsDisabled(false));
+}
+function runEndothermic() {
+    stopAll();
+    setOvalGlow('endo');
+    setButtonsDisabled(true);
+    showArrows('endo');
+    banner.textContent = 'Endothermic Reaction — heat (Q) absorbed from surroundings into system';
+    banner.style.color = '#7dffb0';
+    banner.style.textShadow = '0 0 8px #7dffb0';
+    banner.style.opacity = '1';
+    animateTemp(BASE_TEMP - 10, 'endo', () => setButtonsDisabled(false));
+}
+function animateTemp(target, targetMode, onDone) {
+    const duration = 3200;
+    const startTime = performance.now();
+    const startTemp = surrTemp;
+    if (animFrame)
+        cancelAnimationFrame(animFrame);
+    function step(now) {
+        let t = (now - startTime) / duration;
+        if (t > 1)
+            t = 1;
+        const eased = 1 - Math.pow(1 - t, 3);
+        surrTemp = startTemp + (target - startTemp) * eased;
+        renderTemp();
+        setSurroundingsColor(eased, targetMode);
+        if (t < 1) {
+            animFrame = requestAnimationFrame(step);
+        }
+        else if (onDone) {
+            onDone();
+        }
+    }
+    animFrame = requestAnimationFrame(step);
+}
+function resetSim() {
+    stopAll();
+    setButtonsDisabled(false);
+    if (animFrame)
+        cancelAnimationFrame(animFrame);
+    surrTemp = BASE_TEMP;
+    renderTemp();
+    setSurroundingsColor(0, null);
+}
+btnExo.addEventListener('click', runExothermic);
+btnEndo.addEventListener('click', runEndothermic);
+btnReset.addEventListener('click', resetSim);
+renderTemp();
+</script>
+
+</body>
+</html>

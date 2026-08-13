@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="robots" content="noindex, nofollow, noarchive">
+<script>
+(function(){
+  document.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+  document.addEventListener('keydown', function(e){
+    var k = e.key;
+    var blockedKey = (k === 'F12');
+    var blockedCombo = (e.ctrlKey || e.metaKey) && (
+      k === 'u' || k === 'U' ||
+      k === 's' || k === 'S' ||
+      (e.shiftKey && (k === 'i' || k === 'I' || k === 'j' || k === 'J' || k === 'c' || k === 'C'))
+    );
+    if (blockedKey || blockedCombo) e.preventDefault();
+  });
+})();
+</script>
+<meta charset="UTF-8">
+<title>Energy Profile Diagram — Reaction Progress</title>
+<style>
+  body { background:#000; font-family:-apple-system,'Segoe UI',sans-serif; margin:0; padding:24px; }
+  .wrap { max-width:900px; margin:0 auto; }
+  h1 { color:#FFFA1A; text-align:center; font-size:19px; font-weight:600; letter-spacing:0.3px;
+       text-shadow:0 0 6px rgba(255,250,26,0.85), 0 0 16px rgba(255,250,26,0.5); margin:0 0 4px; }
+  .subtitle { color:#666; text-align:center; font-size:12px; margin:0 0 18px; }
+  .card { background:#050505; border:1px solid #222; border-radius:12px; padding:18px 16px; box-shadow:0 0 20px rgba(0,240,255,0.08); margin-bottom:20px; }
+  canvas { width:100%; height:auto; display:block; background:#000; border-radius:8px; }
+  .controls { display:flex; gap:12px; margin-top:16px; flex-wrap:wrap; justify-content:center; }
+  button.simbtn { background:#0a0a0a; border-radius:8px; padding:11px 22px; font-size:14px; font-weight:700; cursor:pointer; transition:filter 0.15s; }
+  button.simbtn:hover { filter:brightness(1.3); }
+  #btnTS { border:1.5px solid #FFD23C; color:#FFD23C; box-shadow:0 0 10px rgba(255,210,60,0.35); }
+  #btnDH { border:1.5px solid #B388FF; color:#B388FF; box-shadow:0 0 10px rgba(179,136,255,0.35); }
+  #btnMorph { border:1.5px solid #4D8CFF; color:#4D8CFF; box-shadow:0 0 10px rgba(77,140,255,0.4); }
+  #btnStab { border:1.5px solid #39FF6A; color:#39FF6A; box-shadow:0 0 10px rgba(57,255,106,0.4); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Energy Profile Diagram &mdash; Reaction Progress</h1>
+  <p class="subtitle">Reaction progress vs energy</p>
+
+  <div class="card">
+    <canvas id="cv" width="900" height="380"></canvas>
+    <div class="controls">
+      <button class="simbtn" id="btnTS" onclick="toggleTransitionState()">Show Transition State</button>
+      <button class="simbtn" id="btnDH" onclick="toggleEnthalpy()">Show Enthalpy Change</button>
+      <button class="simbtn" id="btnMorph" onclick="toggleMorph()">Convert to Endothermic</button>
+      <button class="simbtn" id="btnStab" onclick="toggleStability()">Show Stability</button>
+    </div>
+  </div>
+</div>
+
+<script>"use strict";
+(function () {
+    const W = 900, H = 380;
+    const pl = 90, pr = 40, pt = 50, pb = 55;
+    const x0 = pl, y0 = pt, x1 = W - pr, y1 = H - pb;
+    const plotW = x1 - x0, plotH = y1 - y0;
+    const PEAK = 0.86;
+    const CURVE_COLOR = '#4D8CFF';
+    const REACT_PROD_COLOR = '#ffffff';
+    const REACT_LEVEL_LINE = '#39FF6A';
+    const TS_COLOR = '#FFD23C';
+    const DH_COLOR = '#B388FF';
+    const LEVELS = {
+        ex: { react: 0.36, prod: 0.16 },
+        en: { react: 0.16, prod: 0.36 }
+    };
+    function Yv(v) { return y1 - v * plotH; }
+    function Xf(frac) { return x0 + frac * plotW; }
+    function lerp(a, b, t) { return a + (b - a) * t; }
+    function roundRect(ctx, x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+    }
+    function textBg(ctx, x, y, text, color, fontSize, align, alpha) {
+        fontSize = fontSize || 13;
+        align = align || 'center';
+        alpha = alpha === undefined ? 1 : alpha;
+        ctx.font = 'bold ' + fontSize + 'px sans-serif';
+        const tw = ctx.measureText(text).width;
+        const padX = 7, padY = 5;
+        let boxX = align === 'center' ? x - tw / 2 - padX : (align === 'left' ? x - padX : x - tw + padX - 2 * padX);
+        const boxY = y - fontSize * 0.8 - padY;
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = 'rgba(0,0,0,0.88)';
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.2;
+        roundRect(ctx, boxX, boxY, tw + 2 * padX, fontSize + 2 * padY, 5);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.textAlign = align;
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(text, x, y);
+        ctx.globalAlpha = 1;
+    }
+    const xReactStart = 0.05, xRiseStart = 0.28, xPeak = 0.52, xFallEnd = 0.76, xProdEnd = 0.95;
+    function curvePoints(yReact, yProd, peakFrac, xPeakPos, n) {
+        const pts = [];
+        for (let i = 0; i <= n; i++) {
+            const f = i / n;
+            let x, y;
+            if (f < xReactStart) {
+                x = f;
+                y = yReact;
+            }
+            else if (f < xRiseStart) {
+                x = f;
+                y = yReact;
+            }
+            else if (f < xPeakPos) {
+                const t = (f - xRiseStart) / (xPeakPos - xRiseStart);
+                const tt = t * t * (3 - 2 * t);
+                x = f;
+                y = yReact + (peakFrac - yReact) * tt;
+            }
+            else if (f < xFallEnd) {
+                const t = (f - xPeakPos) / (xFallEnd - xPeakPos);
+                const tt = t * t * (3 - 2 * t);
+                x = f;
+                y = peakFrac + (yProd - peakFrac) * tt;
+            }
+            else {
+                x = f;
+                y = yProd;
+            }
+            pts.push([x, y]);
+        }
+        return pts;
+    }
+    function drawDiagram(cv, s) {
+        const ctx = cv.getContext('2d');
+        const yReact = lerp(LEVELS.ex.react, LEVELS.en.react, s.morph);
+        const yProd = lerp(LEVELS.ex.prod, LEVELS.en.prod, s.morph);
+        const title = s.morph < 0.5 ? 'Exothermic Reaction' : 'Endothermic Reaction';
+        ctx.clearRect(0, 0, W, H);
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = '#00F0FF';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(title, (x0 + x1) / 2, 26);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.moveTo(x0, y1);
+        ctx.lineTo(x0, y0 - 8);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x0, y1);
+        ctx.lineTo(x1 + 10, y1);
+        ctx.stroke();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.moveTo(x0, y0 - 16);
+        ctx.lineTo(x0 - 5, y0 - 6);
+        ctx.lineTo(x0 + 5, y0 - 6);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(x1 + 18, y1);
+        ctx.lineTo(x1 + 8, y1 - 5);
+        ctx.lineTo(x1 + 8, y1 + 5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#00F0FF';
+        ctx.font = 'bold 14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Reaction Coordinate', (x0 + x1) / 2, H - 14);
+        ctx.save();
+        ctx.translate(20, (y0 + y1) / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillText('Potential Energy', 0, 0);
+        ctx.restore();
+        ctx.strokeStyle = REACT_LEVEL_LINE;
+        ctx.lineWidth = 1.4;
+        ctx.setLineDash([6, 5]);
+        ctx.beginPath();
+        ctx.moveTo(Xf(0), Yv(yReact));
+        ctx.lineTo(Xf(1), Yv(yReact));
+        ctx.stroke();
+        ctx.setLineDash([]);
+        const pts = curvePoints(yReact, yProd, PEAK, xPeak, 140);
+        ctx.strokeStyle = CURVE_COLOR;
+        ctx.lineWidth = 3.5;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        pts.forEach(([f, v], i) => { const px = Xf(f), py = Yv(v); if (i === 0)
+            ctx.moveTo(px, py);
+        else
+            ctx.lineTo(px, py); });
+        ctx.stroke();
+        ctx.strokeStyle = REACT_PROD_COLOR;
+        ctx.lineWidth = 2.6;
+        ctx.beginPath();
+        ctx.moveTo(Xf(xReactStart), Yv(yReact));
+        ctx.lineTo(Xf(xRiseStart), Yv(yReact));
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(Xf(xFallEnd), Yv(yProd));
+        ctx.lineTo(Xf(xProdEnd), Yv(yProd));
+        ctx.stroke();
+        textBg(ctx, Xf(xReactStart), Yv(yReact) - 14, 'Reactants', REACT_PROD_COLOR, 13, 'left');
+        textBg(ctx, Xf(xProdEnd), Yv(yProd) - 14, 'Products', REACT_PROD_COLOR, 13, 'right');
+        const xPeakPx = Xf(xPeak);
+        eaBracket(ctx, xPeakPx, Yv(yReact), Yv(PEAK), CURVE_COLOR, 'Ea (activation energy)', 1, -95, -20);
+        if (s.dhOpacity > 0.003) {
+            const xDh = Xf(0.85);
+            const yHigh = Math.max(yReact, yProd);
+            const yLow = Math.min(yReact, yProd);
+            const label = s.morph < 0.5 ? '\u0394H (negative, exothermic)' : '\u0394H (positive, endothermic)';
+            eaBracket(ctx, xDh, Yv(yLow), Yv(yHigh), DH_COLOR, label, s.dhOpacity, -50, 0);
+        }
+        if (s.tsOpacity > 0.003) {
+            drawTransitionState(ctx, xPeakPx, Yv(PEAK), TS_COLOR, s.tsOpacity, 60, 40);
+        }
+        if (s.stabOpacity > 0.003) {
+            const moreStableIsReact = yReact < yProd;
+            const xReactMid = Xf((xReactStart + xRiseStart) / 2);
+            const xProdMid = Xf(0.90);
+            textBg(ctx, xReactMid, Yv(yReact) - 44, moreStableIsReact ? 'More Stable' : 'Less Stable', REACT_LEVEL_LINE, 12, 'center', s.stabOpacity);
+            textBg(ctx, xProdMid, Yv(yProd) - 44, moreStableIsReact ? 'Less Stable' : 'More Stable', REACT_LEVEL_LINE, 12, 'center', s.stabOpacity);
+        }
+    }
+    function drawTransitionState(ctx, x, yPeak, color, alpha, dx, dy) {
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(x, yPeak, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 1.3;
+        ctx.stroke();
+        const lx = x + dx, ly = yPeak + dy;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.3;
+        ctx.beginPath();
+        ctx.moveTo(x, yPeak);
+        ctx.lineTo(lx, ly);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        textBg(ctx, lx, ly + 4, 'Transition State', color, 12, dx > 0 ? 'left' : 'right', alpha);
+    }
+    function eaBracket(ctx, x, yBottom, yTop, color, label, alpha, dx, dy) {
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x, yBottom);
+        ctx.lineTo(x, yTop);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x - 4, yBottom - 7 * Math.sign(yBottom - yTop || 1));
+        ctx.lineTo(x, yBottom);
+        ctx.lineTo(x + 4, yBottom - 7 * Math.sign(yBottom - yTop || 1));
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x - 4, yTop + 7 * Math.sign(yBottom - yTop || 1));
+        ctx.lineTo(x, yTop);
+        ctx.lineTo(x + 4, yTop + 7 * Math.sign(yBottom - yTop || 1));
+        ctx.stroke();
+        const midY = (yBottom + yTop) / 2;
+        const lx = x + dx, ly = midY + dy;
+        ctx.beginPath();
+        ctx.moveTo(x, midY);
+        ctx.lineTo(lx, ly);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        textBg(ctx, lx, ly, label, color, 12, dx > 0 ? 'left' : 'right', alpha);
+    }
+    const state = { morph: 0, targetMorph: 0, tsOpacity: 0, tsOn: false, dhOpacity: 0, dhOn: false, stabOpacity: 0, stabOn: false };
+    const cv = document.getElementById('cv');
+    function render() {
+        drawDiagram(cv, state);
+    }
+    function animate() {
+        requestAnimationFrame(animate);
+        const s = state;
+        const diffMorph = s.targetMorph - s.morph;
+        if (Math.abs(diffMorph) > 0.003)
+            s.morph += diffMorph * 0.07;
+        else
+            s.morph = s.targetMorph;
+        const targetTS = s.tsOn ? 1 : 0;
+        const diffTS = targetTS - s.tsOpacity;
+        if (Math.abs(diffTS) > 0.004)
+            s.tsOpacity += diffTS * 0.12;
+        else
+            s.tsOpacity = targetTS;
+        const targetDH = s.dhOn ? 1 : 0;
+        const diffDH = targetDH - s.dhOpacity;
+        if (Math.abs(diffDH) > 0.004)
+            s.dhOpacity += diffDH * 0.12;
+        else
+            s.dhOpacity = targetDH;
+        const targetStab = s.stabOn ? 1 : 0;
+        const diffStab = targetStab - s.stabOpacity;
+        if (Math.abs(diffStab) > 0.004)
+            s.stabOpacity += diffStab * 0.12;
+        else
+            s.stabOpacity = targetStab;
+        render();
+    }
+    window.toggleTransitionState = function () {
+        state.tsOn = !state.tsOn;
+        document.getElementById('btnTS').textContent = state.tsOn ? 'Hide Transition State' : 'Show Transition State';
+    };
+    window.toggleEnthalpy = function () {
+        state.dhOn = !state.dhOn;
+        document.getElementById('btnDH').textContent = state.dhOn ? 'Hide Enthalpy Change' : 'Show Enthalpy Change';
+    };
+    window.toggleStability = function () {
+        state.stabOn = !state.stabOn;
+        document.getElementById('btnStab').textContent = state.stabOn ? 'Hide Stability' : 'Show Stability';
+    };
+    window.toggleMorph = function () {
+        state.targetMorph = state.targetMorph === 0 ? 1 : 0;
+        document.getElementById('btnMorph').textContent = state.targetMorph === 1 ? 'Convert to Exothermic' : 'Convert to Endothermic';
+    };
+    render();
+    animate();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="robots" content="noindex, nofollow, noarchive">
+<script>
+(function(){
+  document.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+  document.addEventListener('keydown', function(e){
+    var k = e.key;
+    var blockedKey = (k === 'F12');
+    var blockedCombo = (e.ctrlKey || e.metaKey) && (
+      k === 'u' || k === 'U' ||
+      k === 's' || k === 'S' ||
+      (e.shiftKey && (k === 'i' || k === 'I' || k === 'j' || k === 'J' || k === 'c' || k === 'C'))
+    );
+    if (blockedKey || blockedCombo) e.preventDefault();
+  });
+})();
+</script>
+<meta charset="UTF-8">
+<title>Enthalpy of Solution — Ammonium Chloride</title>
+<style>
+  body { background:#000; font-family:-apple-system,'Segoe UI',sans-serif; margin:0; padding:24px; }
+  .wrap { max-width:1000px; margin:0 auto; }
+  h1 { color:#FFFA1A; text-align:center; font-size:19px; font-weight:600; letter-spacing:0.3px;
+       text-shadow:0 0 6px rgba(255,250,26,0.85), 0 0 16px rgba(255,250,26,0.5); margin:0 0 4px; }
+  .subtitle { color:#666; text-align:center; font-size:12px; margin:0 0 14px; }
+
+  .equationRow { display:flex; align-items:flex-end; justify-content:center; gap:14px; margin:0 0 16px; flex-wrap:wrap; }
+  .reactantCol { display:flex; flex-direction:column; align-items:center; }
+  .reactantCol .formula { color:#00F0FF; font-size:16px; font-weight:700; text-shadow:0 0 6px rgba(0,240,255,0.6); }
+  .reactantCol .stats { color:#FFD23C; font-size:11px; margin-top:3px; text-shadow:0 0 4px rgba(255,210,60,0.4); }
+  .equationRow .plus, .equationRow .arrow { color:#00F0FF; font-size:16px; font-weight:700; padding-bottom:16px; }
+  .equationRow .products { color:#00F0FF; font-size:16px; font-weight:700; text-shadow:0 0 6px rgba(0,240,255,0.6); padding-bottom:16px; }
+  .arrowWithSolvent { display:inline-flex; flex-direction:column; align-items:center; padding-bottom:16px; line-height:1; }
+  .arrowWithSolvent .solventLabel { font-size:12px; color:#5ff2ff; text-shadow:0 0 6px rgba(95,242,255,0.6); margin-bottom:2px; }
+  .arrowWithSolvent .arrowGlyph { color:#00F0FF; font-size:16px; font-weight:700; }
+
+  .card { background:#050505; border:1px solid #222; border-radius:12px; padding:18px 16px; box-shadow:0 0 20px rgba(0,240,255,0.08); }
+  #stageWrap { position:relative; width:100%; }
+  canvas#three-canvas { width:100%; height:560px; display:block; border-radius:8px; background:#000; }
+
+  .readouts { display:flex; gap:12px; margin-top:16px; flex-wrap:wrap; justify-content:center; font-size:12.5px; }
+  .readoutBox { background:#070707; border:1px solid #1c1c1c; border-radius:8px; padding:8px 14px; text-align:center; min-width:130px; }
+  .readoutBox .lbl { color:#888; font-size:10.5px; text-transform:uppercase; letter-spacing:0.4px; }
+  .readoutBox .val { font-weight:700; font-size:15px; margin-top:2px; }
+
+  .controls { display:flex; align-items:center; gap:12px; margin-top:16px; flex-wrap:wrap; justify-content:center; }
+  button.simbtn { background:#0a0a0a; border-radius:8px; padding:11px 22px; font-size:14px; font-weight:700; cursor:pointer; transition:filter 0.15s; }
+  button.simbtn:hover:not(:disabled) { filter:brightness(1.3); }
+  button.simbtn:disabled { opacity:0.4; cursor:default; }
+  #btnStart { border:1.5px solid #FF6A00; color:#FF6A00; box-shadow:0 0 10px rgba(255,106,0,0.4); }
+  #btnSeeThrough { border:1.5px solid #39FFE8; color:#39FFE8; box-shadow:0 0 10px rgba(57,255,232,0.35); }
+  #btnReset { border:1.5px solid #FFD23C; color:#FFD23C; box-shadow:0 0 10px rgba(255,210,60,0.35); }
+  #btnStartLogger { border:1.5px solid #39FF14; color:#39FF14; box-shadow:0 0 10px rgba(57,255,20,0.4); }
+  #btnStopLogger { border:1.5px solid #FF2D55; color:#FF2D55; box-shadow:0 0 10px rgba(255,45,85,0.4); }
+  #btnExtrapolate { border:1.5px solid #B388FF; color:#B388FF; box-shadow:0 0 10px rgba(179,136,255,0.4); }
+  #btnZoomGraph { border:1.5px solid #4D8CFF; color:#4D8CFF; box-shadow:0 0 10px rgba(77,140,255,0.4); }
+
+  .resultsBox { margin-top:16px; padding:12px 14px; border-radius:8px; background:#070707; border:1px solid #1c1c1c;
+                color:#fff; font-size:12.5px; line-height:1.6; text-align:center; display:none; }
+  .resultsBox.show { display:block; }
+  .resultsBox b { color:#39FF14; }
+
+  .footnote { color:#888; font-size:12px; margin-top:14px; line-height:1.55; }
+
+  .slider-row-v { position:absolute; left:0px; top:50%; transform:translateY(-50%); z-index:6;
+                  display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .slider-row-v span { color:#39FFE8; font-size:13px; line-height:1; }
+  #panSlider { writing-mode: vertical-lr; direction:rtl; width:6px; height:140px; accent-color:#39FFE8; cursor:pointer; }
+  .slider-row-h { position:absolute; left:50%; bottom:10px; transform:translateX(-50%); z-index:6;
+                  display:flex; align-items:center; gap:6px; }
+  .slider-row-h span { color:#39FFE8; font-size:13px; line-height:1; }
+  #panSliderX { width:150px; accent-color:#39FFE8; cursor:pointer; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Enthalpy of Solution</h1>
+  <p class="subtitle">Determining the heat absorbed when ammonium chloride powder dissolves fully in distilled water, using a coffee cup calorimeter</p>
+
+  <div class="equationRow">
+    <div class="reactantCol">
+      <div class="formula">NH&#8324;Cl(s)</div>
+      <div class="stats">0.10 mol, 5.35 g</div>
+    </div>
+    <div class="plus">+</div>
+    <div class="reactantCol">
+      <div class="formula">Heat</div>
+      <div class="stats">absorbed</div>
+    </div>
+    <div class="arrowWithSolvent">
+      <span class="solventLabel">H&#8322;O</span>
+      <span class="arrowGlyph">&rarr;</span>
+    </div>
+    <div class="products">NH&#8324;&#8314;(aq) + Cl&#8315;(aq)</div>
+  </div>
+
+  <div class="card">
+    <div id="stageWrap">
+      <canvas id="three-canvas"></canvas>
+
+      <div class="slider-row-v">
+        <span>&uarr;</span>
+        <input type="range" id="panSlider" min="-3" max="3" step="0.05" value="0" oninput="onPanSlider(this.value)" aria-label="Scroll the view up or down">
+        <span>&darr;</span>
+      </div>
+      <div class="slider-row-h">
+        <span>&larr;</span>
+        <input type="range" id="panSliderX" min="-3" max="3" step="0.05" value="0" oninput="onPanSliderX(this.value)" aria-label="Scroll the view left or right">
+        <span>&rarr;</span>
+      </div>
+    </div>
+
+    <div class="readouts">
+      <div class="readoutBox"><div class="lbl">Initial Temp (H&#8322;O)</div><div class="val" style="color:#5ff2ff" id="initTemp">21.0 &deg;C</div></div>
+      <div class="readoutBox"><div class="lbl">Current Temp</div><div class="val" style="color:#5ff2ff" id="curTemp">21.0 &deg;C</div></div>
+      <div class="readoutBox"><div class="lbl">Total Volume</div><div class="val" style="color:#00D9FF" id="curVol">50.0 cm&#179;</div></div>
+      <div class="readoutBox"><div class="lbl">Elapsed Time</div><div class="val" style="color:#39FF14" id="curTime">0 s</div></div>
+    </div>
+
+    <div class="controls">
+      <button class="simbtn" id="btnStartLogger" onclick="startLogger()">Start Logger</button>
+      <button class="simbtn" id="btnStart" onclick="startReaction()" disabled>Add NH&#8324;Cl</button>
+      <button class="simbtn" id="btnStopLogger" onclick="stopLogger()" disabled>Stop Logger</button>
+      <button class="simbtn" id="btnExtrapolate" onclick="extrapolateCooling()" disabled>Extrapolate Warming Curve</button>
+      <button class="simbtn" id="btnZoomGraph" onclick="toggleZoomGraph()">Zoom Into Graph</button>
+      <button class="simbtn" id="btnSeeThrough" onclick="toggleSeeThrough()">Make Cup See-Through</button>
+      <button class="simbtn" id="btnReset" onclick="resetSimulation()">Reset</button>
+    </div>
+
+    <div class="resultsBox" id="resultsBox">
+      Initial temperature: <b id="resInitTemp">--</b> &nbsp;|&nbsp;
+      Lowest temperature: <b id="resFinalTemp">--</b><br>
+      Temperature change (&Delta;T): <b id="resDeltaT">--</b>
+      <div id="extrapolateResult" style="display:none; margin-top:8px; border-top:1px solid #222; padding-top:8px;">
+        Extrapolated line: <b id="resEquation">--</b> &nbsp;|&nbsp; t used (temp starts falling): <b id="resTUsed">--</b><br>
+        Corrected temperature at mixing: <b id="resCorrectedTemp">--</b> &nbsp;|&nbsp;
+        Corrected &Delta;T (accounting for heat gained back): <b id="resCorrectedDeltaT">--</b>
+      </div>
+    </div>
+
+    <p class="footnote">Press <b>Start Logger</b> to begin recording temperature against time, then <b>Add NH&#8324;Cl</b> once you have a steady baseline — crystals drop into the water and dissolve completely. Because dissolving NH&#8324;Cl is endothermic, the temperature falls as the solution draws heat from itself to break apart the ionic lattice. After it bottoms out, the cup (not being a perfect insulator) gains heat back from the surroundings and the temperature drifts back up in a roughly straight line. Press <b>Stop Logger</b> once you have enough of that warming trend, then <b>Extrapolate Warming Curve</b> to fit a straight line back through that data and read off the temperature it predicts at the moment of mixing — the standard way of correcting for heat exchange with the surroundings in a coffee cup calorimetry experiment.</p>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>"use strict";
+(function () {
+    const canvas = document.getElementById('three-canvas');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x000000);
+    const camera = new THREE.PerspectiveCamera(45, canvas.clientWidth / canvas.clientHeight, 0.1, 100);
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    function resize() {
+        const w = canvas.clientWidth, h = canvas.clientHeight || 560;
+        renderer.setSize(w, h, false);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', resize);
+    scene.add(new THREE.AmbientLight(0x99aabb, 1.5));
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.0);
+    keyLight.position.set(4, 8, 5);
+    scene.add(keyLight);
+    const rimLight = new THREE.DirectionalLight(0x5cc3ff, 1.0);
+    rimLight.position.set(-5, 3, -4);
+    scene.add(rimLight);
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    fillLight.position.set(0, 4, 8);
+    scene.add(fillLight);
+    let theta = 0.35, phi = 1.15, radius = 10;
+    const target = new THREE.Vector3(0, 1.8, 0);
+    const BASE_TARGET_X = 0, BASE_TARGET_Y = 1.8;
+    function updateCam() {
+        camera.position.set(target.x + radius * Math.sin(phi) * Math.sin(theta), target.y + radius * Math.cos(phi), target.z + radius * Math.sin(phi) * Math.cos(theta));
+        camera.lookAt(target);
+    }
+    updateCam();
+    let camAnim = null;
+    function tweenCamTo(toTheta, toPhi, toRadius, toTarget, duration) {
+        camAnim = {
+            fromTheta: theta, toTheta,
+            fromPhi: phi, toPhi,
+            fromRadius: radius, toRadius,
+            fromTarget: target.clone(), toTarget: toTarget.clone(),
+            start: performance.now(), duration
+        };
+    }
+    function updateCamAnim(now) {
+        if (!camAnim)
+            return;
+        const t = Math.min(1, (now - camAnim.start) / camAnim.duration);
+        const e = t * t * (3 - 2 * t);
+        theta = camAnim.fromTheta + (camAnim.toTheta - camAnim.fromTheta) * e;
+        phi = camAnim.fromPhi + (camAnim.toPhi - camAnim.fromPhi) * e;
+        radius = camAnim.fromRadius + (camAnim.toRadius - camAnim.fromRadius) * e;
+        target.lerpVectors(camAnim.fromTarget, camAnim.toTarget, e);
+        updateCam();
+        if (t >= 1)
+            camAnim = null;
+    }
+    let dragging = false, lastX = 0, lastY = 0;
+    canvas.addEventListener('pointerdown', e => { dragging = true; lastX = e.clientX; lastY = e.clientY; });
+    window.addEventListener('pointerup', () => dragging = false);
+    window.addEventListener('pointermove', e => {
+        if (!dragging)
+            return;
+        const dx = e.clientX - lastX, dy = e.clientY - lastY;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        theta -= dx * 0.006;
+        phi = Math.min(2.5, Math.max(0.3, phi - dy * 0.006));
+        updateCam();
+    });
+    canvas.addEventListener('wheel', e => {
+        e.preventDefault();
+        radius = Math.min(20, Math.max(4, radius + e.deltaY * 0.01));
+        updateCam();
+    }, { passive: false });
+    window.onPanSlider = function (v) { target.y = BASE_TARGET_Y - parseFloat(v); updateCam(); };
+    window.onPanSliderX = function (v) { target.x = BASE_TARGET_X + parseFloat(v); updateCam(); };
+    const rig = new THREE.Group();
+    scene.add(rig);
+    const cupX = -0.6;
+    const stirrerBodyMat = new THREE.MeshStandardMaterial({ color: 0x2e2e32, roughness: 0.5, metalness: 0.3, emissive: 0x0a0a0c, emissiveIntensity: 0.3 });
+    const stirrerBody = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.55, 0.4, 32), stirrerBodyMat);
+    stirrerBody.position.set(cupX, 0.2, 0);
+    rig.add(stirrerBody);
+    const stirrerPlateMat = new THREE.MeshStandardMaterial({ color: 0x222224, roughness: 0.65, metalness: 0.1 });
+    const stirrerPlate = new THREE.Mesh(new THREE.CylinderGeometry(1.35, 1.35, 0.06, 32), stirrerPlateMat);
+    stirrerPlate.position.set(cupX, 0.43, 0);
+    rig.add(stirrerPlate);
+    const knobMat = new THREE.MeshStandardMaterial({ color: 0x8a8a8a, roughness: 0.4, metalness: 0.5 });
+    const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.1, 20), knobMat);
+    knob.rotation.z = Math.PI / 2;
+    knob.position.set(cupX, 0.28, 1.44);
+    rig.add(knob);
+    const dial = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.11, 0.02), new THREE.MeshStandardMaterial({ color: 0xff3b3b }));
+    dial.position.set(cupX, 0.28, 1.5);
+    rig.add(dial);
+    const speedKnobX = cupX + 0.95, speedKnobZ = 0.5;
+    const speedKnobBaseMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1e, roughness: 0.5, metalness: 0.3 });
+    const speedKnobBase = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.17, 0.05, 24), speedKnobBaseMat);
+    speedKnobBase.position.set(speedKnobX, 0.46 + 0.025, speedKnobZ);
+    rig.add(speedKnobBase);
+    const speedKnobMat = new THREE.MeshStandardMaterial({ color: 0x3a3a3e, roughness: 0.35, metalness: 0.5 });
+    const speedKnob = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.09, 24), speedKnobMat);
+    speedKnob.position.set(speedKnobX, 0.46 + 0.09, speedKnobZ);
+    rig.add(speedKnob);
+    const speedKnobPointer = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.01, 0.1), new THREE.MeshStandardMaterial({ color: 0xe0e0e0, roughness: 0.3 }));
+    speedKnobPointer.position.set(speedKnobX, 0.46 + 0.14, speedKnobZ - 0.06);
+    rig.add(speedKnobPointer);
+    const tickMat = new THREE.MeshStandardMaterial({ color: 0x666666 });
+    for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        const tick = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.012, 0.03), tickMat);
+        tick.position.set(speedKnobX + Math.sin(a) * 0.19, 0.46 + 0.03, speedKnobZ + Math.cos(a) * 0.19);
+        tick.rotation.y = a;
+        rig.add(tick);
+    }
+    const cupBaseY = 0.46;
+    const CUP_R_TOP = 0.95, CUP_R_BOT = 0.85, CUP_H = 2.3;
+    const foamMat = new THREE.MeshStandardMaterial({
+        color: 0xaba290, roughness: 0.85, metalness: 0.0,
+        transparent: true, opacity: 1, side: THREE.DoubleSide
+    });
+    const cupWall = new THREE.Mesh(new THREE.CylinderGeometry(CUP_R_TOP, CUP_R_BOT, CUP_H, 32, 1, true), foamMat);
+    cupWall.position.set(cupX, cupBaseY + CUP_H / 2, 0);
+    rig.add(cupWall);
+    const cupBottom = new THREE.Mesh(new THREE.CylinderGeometry(CUP_R_BOT, CUP_R_BOT, 0.06, 32), foamMat);
+    cupBottom.position.set(cupX, cupBaseY, 0);
+    rig.add(cupBottom);
+    const cupRim = new THREE.Mesh(new THREE.TorusGeometry(CUP_R_TOP, 0.03, 8, 32), foamMat);
+    cupRim.rotation.x = Math.PI / 2;
+    cupRim.position.set(cupX, cupBaseY + CUP_H, 0);
+    rig.add(cupRim);
+    const LIQUID_BASE_Y = cupBaseY + 0.05;
+    const LIQUID_H = 1.7;
+    const WALL_CLEARANCE = 0.9;
+    const liquidMat = new THREE.MeshPhysicalMaterial({
+        color: 0xd8f0ff, transparent: true, opacity: 0.45, roughness: 0.08, transmission: 0.6,
+        side: THREE.DoubleSide, depthWrite: false
+    });
+    let liquid = new THREE.Mesh(new THREE.CylinderGeometry(CUP_R_BOT * WALL_CLEARANCE, CUP_R_BOT * WALL_CLEARANCE, 0.001, 32), liquidMat);
+    rig.add(liquid);
+    function setLiquidHeight(h) {
+        h = Math.max(0.001, h);
+        const topRadiusAtH = CUP_R_BOT + (CUP_R_TOP - CUP_R_BOT) * (h / CUP_H);
+        rig.remove(liquid);
+        liquid.geometry.dispose();
+        liquid = new THREE.Mesh(new THREE.CylinderGeometry(topRadiusAtH * WALL_CLEARANCE, CUP_R_BOT * WALL_CLEARANCE, h, 32), liquidMat);
+        liquid.position.set(cupX, LIQUID_BASE_Y + h / 2, 0);
+        rig.add(liquid);
+    }
+    setLiquidHeight(LIQUID_H);
+    const stirBarGroup = new THREE.Group();
+    stirBarGroup.position.set(cupX, LIQUID_BASE_Y + 0.07, 0);
+    rig.add(stirBarGroup);
+    const stirBarMat = new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.3, metalness: 0.1 });
+    const stirBarBody = new THREE.Mesh(new THREE.SphereGeometry(0.09, 16, 12), stirBarMat);
+    stirBarBody.scale.set(3.2, 1, 1);
+    stirBarGroup.add(stirBarBody);
+    const stirBarCapMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.4 });
+    const capL = new THREE.Mesh(new THREE.SphereGeometry(0.095, 12, 10), stirBarCapMat);
+    capL.position.set(-0.22, 0, 0);
+    capL.scale.set(0.5, 1, 1);
+    stirBarGroup.add(capL);
+    const capR = new THREE.Mesh(new THREE.SphereGeometry(0.095, 12, 10), stirBarCapMat);
+    capR.position.set(0.22, 0, 0);
+    capR.scale.set(0.5, 1, 1);
+    stirBarGroup.add(capR);
+    const probeMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.3, metalness: 0.6 });
+    const PROBE_LEN = 1.9;
+    const liquidSurfaceY = LIQUID_BASE_Y + LIQUID_H;
+    const probeTipY = liquidSurfaceY - 0.5;
+    const probeCenterY = probeTipY + PROBE_LEN / 2;
+    const probe = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, PROBE_LEN, 12), probeMat);
+    probe.position.set(cupX + 0.3, probeCenterY, 0.25);
+    probe.rotation.z = 0.05;
+    rig.add(probe);
+    const probeTopY = probeCenterY + PROBE_LEN / 2;
+    const loggerX = cupX - 2.35, loggerBaseY = 0.46;
+    const loggerBodyMat = new THREE.MeshStandardMaterial({ color: 0x2a2a2e, roughness: 0.5, metalness: 0.3, emissive: 0x0a0a0c, emissiveIntensity: 0.3 });
+    const loggerBody = new THREE.Mesh(new THREE.BoxGeometry(2.15, 1.7, 0.24), loggerBodyMat);
+    loggerBody.position.set(loggerX, loggerBaseY + 1.7 / 2 + 0.3, 0);
+    rig.add(loggerBody);
+    const loggerStandMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1e, roughness: 0.5, metalness: 0.4 });
+    const loggerStand = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.3, 0.6), loggerStandMat);
+    loggerStand.position.set(loggerX, loggerBaseY + 0.15, 0);
+    rig.add(loggerStand);
+    const hwBtnGreenMat = new THREE.MeshStandardMaterial({ color: 0x2ecc40, emissive: 0x113311, roughness: 0.4 });
+    const hwBtnRedMat = new THREE.MeshStandardMaterial({ color: 0xff4136, emissive: 0x330a0a, roughness: 0.4 });
+    const hwBtnGreen = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.03, 16), hwBtnGreenMat);
+    hwBtnGreen.rotation.x = Math.PI / 2;
+    hwBtnGreen.position.set(loggerX - 0.8, loggerBody.position.y - 0.62, 0.13);
+    rig.add(hwBtnGreen);
+    const hwBtnRed = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.03, 16), hwBtnRedMat);
+    hwBtnRed.rotation.x = Math.PI / 2;
+    hwBtnRed.position.set(loggerX - 0.5, loggerBody.position.y - 0.62, 0.13);
+    rig.add(hwBtnRed);
+    const GRAPH_W = 560, GRAPH_H = 380;
+    function makeGraphCanvas() { const c = document.createElement('canvas'); c.width = GRAPH_W; c.height = GRAPH_H; return c; }
+    const graphCanvas = makeGraphCanvas();
+    const graphTex = new THREE.CanvasTexture(graphCanvas);
+    const graphScreen = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 1.29), new THREE.MeshBasicMaterial({ map: graphTex }));
+    graphScreen.position.set(loggerX, loggerBody.position.y + 0.05, 0.125);
+    rig.add(graphScreen);
+    const wireStart = new THREE.Vector3(cupX + 0.3, probeTopY, 0.25);
+    const wireClearCup = new THREE.Vector3(cupX - 1.3, cupBaseY + CUP_H + 0.7, 0.2);
+    const wireDescend = new THREE.Vector3(loggerX + 0.9, loggerBody.position.y + 1.55, 0.05);
+    const wireEnd = new THREE.Vector3(loggerX + 0.2, loggerBody.position.y + 0.87, 0.0);
+    const wireCurve = new THREE.CatmullRomCurve3([wireStart, wireClearCup, wireDescend, wireEnd], false, 'catmullrom', 0.5);
+    const wireGeo = new THREE.TubeGeometry(wireCurve, 48, 0.022, 8, false);
+    const wireMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1c, roughness: 0.55, metalness: 0.1 });
+    rig.add(new THREE.Mesh(wireGeo, wireMat));
+    const CRYSTAL_COUNT = 7;
+    const crystalMat = new THREE.MeshStandardMaterial({ color: 0xf2f2ee, roughness: 0.5, metalness: 0.05 });
+    const crystals = [];
+    for (let i = 0; i < CRYSTAL_COUNT; i++) {
+        const baseR = 0.09 + Math.random() * 0.045;
+        const geo = new THREE.IcosahedronGeometry(baseR, 0);
+        const mesh = new THREE.Mesh(geo, crystalMat);
+        const ang = (i / CRYSTAL_COUNT) * Math.PI * 2 + Math.random() * 0.4;
+        const rad = 0.15 + Math.random() * (CUP_R_BOT * 0.55 - 0.15);
+        const restPos = new THREE.Vector3(cupX + Math.cos(ang) * rad, LIQUID_BASE_Y + 0.08 + Math.random() * 0.05, Math.sin(ang) * rad);
+        const abovePos = new THREE.Vector3(cupX + Math.cos(ang) * rad * 0.6, cupBaseY + CUP_H + 1.4 + Math.random() * 0.6, Math.sin(ang) * rad * 0.6);
+        mesh.position.copy(abovePos);
+        mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+        mesh.visible = false;
+        rig.add(mesh);
+        crystals.push({
+            mesh, restPos, abovePos,
+            fallDelay: (i / CRYSTAL_COUNT) * 0.35,
+            settled: false,
+            orbitRadius: rad,
+            orbitAngle: ang,
+            orbitSpeed: (0.55 + Math.random() * 0.35) * (rad > 0 ? 1 / rad : 1),
+            bobPhase: Math.random() * Math.PI * 2
+        });
+    }
+    function updateZincFall(addProgress) {
+        crystals.forEach(p => {
+            const local = Math.max(0, Math.min(1, (addProgress - p.fallDelay) / (1 - p.fallDelay)));
+            if (local <= 0) {
+                p.mesh.visible = false;
+                p.settled = false;
+                return;
+            }
+            p.mesh.visible = true;
+            const eased = local * local * (3 - 2 * local);
+            p.mesh.position.lerpVectors(p.abovePos, p.restPos, eased);
+            p.mesh.rotation.x += 0.04;
+            p.mesh.rotation.z += 0.03;
+            p.settled = (local >= 1);
+        });
+    }
+    function updateZincOrbit(dt, stirBarSpeed) {
+        crystals.forEach(p => {
+            if (!p.settled)
+                return;
+            p.orbitAngle -= dt * stirBarSpeed * p.orbitSpeed * 0.05;
+            p.bobPhase += dt * 3;
+            const bob = Math.sin(p.bobPhase) * 0.015;
+            p.mesh.position.x = cupX + Math.cos(p.orbitAngle) * p.orbitRadius;
+            p.mesh.position.z = Math.sin(p.orbitAngle) * p.orbitRadius;
+            p.mesh.position.y = p.restPos.y + bob;
+            p.mesh.rotation.y += dt * 0.8;
+        });
+    }
+    function updateZincReaction(progress) {
+        crystals.forEach(p => {
+            p.mesh.scale.setScalar(Math.max(0.001, 1 - progress));
+            if (progress >= 0.999)
+                p.mesh.visible = false;
+        });
+    }
+    resize();
+    const INITIAL_TEMP = 21.0;
+    const FINAL_TEMP = 15.0;
+    const WARM_RATE = 0.014;
+    const TIME_SCALE = 8;
+    const RECORD_INTERVAL = 1;
+    const POUR_DURATION = 3600;
+    const MIX_DURATION = 3200;
+    let reactPhase = 'idle';
+    let phaseStart = 0;
+    let loggerOn = false;
+    let simTime = 0;
+    let lastRecordT = -999;
+    let dataPoints = [];
+    let tPourStart = null;
+    let tCoolStart = null;
+    let coolStartTemp = FINAL_TEMP;
+    let extrapolation = null;
+    let curTemp = INITIAL_TEMP;
+    let curVol = 50.0;
+    function easeInOut(x) { return x * x * (3 - 2 * x); }
+    function fmtTemp(t) { return t.toFixed(1) + ' \u00b0C'; }
+    function fmtVol(v) { return v.toFixed(1) + ' cm\u00b3'; }
+    function updateReadouts() {
+        document.getElementById('curTemp').textContent = fmtTemp(curTemp);
+        document.getElementById('curVol').textContent = fmtVol(curVol);
+        document.getElementById('curTime').textContent = Math.round(simTime) + ' s';
+    }
+    const gctx = graphCanvas.getContext('2d');
+    const G_PL = 55, G_PR = 15, G_PT = 20, G_PB = 35;
+    const G_X0 = G_PL, G_Y0 = G_PT, G_X1 = GRAPH_W - G_PR, G_Y1 = GRAPH_H - G_PB;
+    const G_YMIN = 10, G_YMAX = 25;
+    function gx(t, xMax) { return G_X0 + (t / xMax) * (G_X1 - G_X0); }
+    function gy(T) { return G_Y1 - ((T - G_YMIN) / (G_YMAX - G_YMIN)) * (G_Y1 - G_Y0); }
+    function drawGraph() {
+        const xMax = Math.max(40, Math.ceil((simTime + 5) / 20) * 20);
+        gctx.clearRect(0, 0, GRAPH_W, GRAPH_H);
+        gctx.fillStyle = '#050505';
+        gctx.fillRect(0, 0, GRAPH_W, GRAPH_H);
+        gctx.strokeStyle = '#888';
+        gctx.lineWidth = 1.5;
+        gctx.beginPath();
+        gctx.moveTo(G_X0, G_Y1);
+        gctx.lineTo(G_X0, G_Y0);
+        gctx.stroke();
+        gctx.beginPath();
+        gctx.moveTo(G_X0, G_Y1);
+        gctx.lineTo(G_X1, G_Y1);
+        gctx.stroke();
+        gctx.font = '10px monospace';
+        gctx.fillStyle = '#666';
+        gctx.textAlign = 'center';
+        gctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        gctx.lineWidth = 1;
+        for (let T = G_YMIN; T <= G_YMAX; T += 5) {
+            const y = gy(T);
+            gctx.beginPath();
+            gctx.moveTo(G_X0, y);
+            gctx.lineTo(G_X1, y);
+            gctx.stroke();
+            gctx.textAlign = 'right';
+            gctx.fillText(T.toFixed(0), G_X0 - 6, y + 3);
+        }
+        for (let t = 0; t <= xMax; t += 20) {
+            const x = gx(t, xMax);
+            gctx.beginPath();
+            gctx.moveTo(x, G_Y0);
+            gctx.lineTo(x, G_Y1);
+            gctx.stroke();
+            gctx.textAlign = 'center';
+            gctx.fillStyle = '#666';
+            gctx.fillText(t.toFixed(0), x, G_Y1 + 14);
+        }
+        gctx.fillStyle = '#00eaff';
+        gctx.font = 'bold 11px monospace';
+        gctx.textAlign = 'center';
+        gctx.fillText('TEMPERATURE vs TIME', (G_X0 + G_X1) / 2, 12);
+        gctx.save();
+        gctx.translate(14, (G_Y0 + G_Y1) / 2);
+        gctx.rotate(-Math.PI / 2);
+        gctx.fillText('TEMP (\u00b0C)', 0, 0);
+        gctx.restore();
+        gctx.fillText('TIME (s)', (G_X0 + G_X1) / 2, GRAPH_H - 6);
+        if (dataPoints.length > 1) {
+            gctx.strokeStyle = '#39FF6A';
+            gctx.lineWidth = 2.2;
+            gctx.lineJoin = 'round';
+            gctx.lineCap = 'round';
+            gctx.beginPath();
+            const pts = dataPoints.map(p => [gx(p.t, xMax), gy(p.T)]);
+            gctx.moveTo(pts[0][0], pts[0][1]);
+            for (let i = 1; i < pts.length - 1; i++) {
+                const midX = (pts[i][0] + pts[i + 1][0]) / 2;
+                const midY = (pts[i][1] + pts[i + 1][1]) / 2;
+                gctx.quadraticCurveTo(pts[i][0], pts[i][1], midX, midY);
+            }
+            const last = pts[pts.length - 1];
+            gctx.lineTo(last[0], last[1]);
+            gctx.stroke();
+        }
+        if (tPourStart != null) {
+            const mx = gx(tPourStart, xMax);
+            gctx.strokeStyle = '#FF6A00';
+            gctx.lineWidth = 1.4;
+            gctx.setLineDash([4, 4]);
+            gctx.beginPath();
+            gctx.moveTo(mx, G_Y0);
+            gctx.lineTo(mx, G_Y1);
+            gctx.stroke();
+            gctx.setLineDash([]);
+            const sq = 6;
+            gctx.fillStyle = '#FF6A00';
+            gctx.fillRect(mx - sq / 2, G_Y0 - sq / 2, sq, sq);
+            gctx.font = 'bold 10px monospace';
+            gctx.textAlign = 'left';
+            gctx.fillStyle = '#FF6A00';
+            gctx.fillText('temp starts falling, t=' + tPourStart.toFixed(1) + 's', mx + 6, G_Y0 + 9);
+        }
+        if (extrapolation) {
+            const { m, c } = extrapolation;
+            const tStart = tPourStart != null ? tPourStart : 0;
+            const x0 = gx(tStart, xMax), y0 = gy(m * tStart + c);
+            const x1 = gx(xMax, xMax), y1 = gy(m * xMax + c);
+            gctx.strokeStyle = '#FFD23C';
+            gctx.lineWidth = 1.8;
+            gctx.setLineDash([6, 5]);
+            gctx.beginPath();
+            gctx.moveTo(x0, y0);
+            gctx.lineTo(x1, y1);
+            gctx.stroke();
+            gctx.setLineDash([]);
+            gctx.fillStyle = '#FFD23C';
+            gctx.beginPath();
+            gctx.arc(x0, y0, 3.5, 0, Math.PI * 2);
+            gctx.fill();
+            const sign = c >= 0 ? '+' : '\u2212';
+            const eq = 'T = ' + m.toFixed(4) + 't ' + sign + ' ' + Math.abs(c).toFixed(2);
+            gctx.fillStyle = '#FFD23C';
+            gctx.font = 'bold 11px monospace';
+            gctx.textAlign = 'right';
+            gctx.fillText(eq, G_X1 - 4, G_Y0 + 14);
+        }
+        graphTex.needsUpdate = true;
+    }
+    drawGraph();
+    function recordPoint() {
+        dataPoints.push({ t: simTime, T: curTemp, phase: reactPhase });
+        lastRecordT = simTime;
+        drawGraph();
+    }
+    let lastFrame = performance.now();
+    function tick(now) {
+        requestAnimationFrame(now2 => tick(now2));
+        const dt = Math.min(0.1, (now - lastFrame) / 1000);
+        lastFrame = now;
+        updateCamAnim(now);
+        const STIR_SPEED = 7.5;
+        stirBarGroup.rotation.y += dt * STIR_SPEED;
+        updateZincOrbit(dt, STIR_SPEED);
+        if (loggerOn)
+            simTime += dt * TIME_SCALE;
+        if (reactPhase === 'pouring') {
+            const p = Math.min(1, (now - phaseStart) / POUR_DURATION);
+            updateZincFall(p);
+            if (p >= 1) {
+                reactPhase = 'heating';
+                phaseStart = now;
+                tPourStart = simTime;
+                drawGraph();
+            }
+        }
+        else if (reactPhase === 'heating') {
+            const p = Math.min(1, (now - phaseStart) / MIX_DURATION);
+            const reactProgress = easeInOut(p);
+            curTemp = INITIAL_TEMP + (FINAL_TEMP - INITIAL_TEMP) * reactProgress;
+            updateZincReaction(reactProgress);
+            if (p >= 1) {
+                reactPhase = 'cooling';
+                tCoolStart = simTime;
+                coolStartTemp = curTemp;
+                document.getElementById('resInitTemp').textContent = fmtTemp(INITIAL_TEMP);
+                document.getElementById('resFinalTemp').textContent = fmtTemp(FINAL_TEMP);
+                document.getElementById('resDeltaT').textContent = Math.abs(FINAL_TEMP - INITIAL_TEMP).toFixed(1) + ' \u00b0C';
+                document.getElementById('resultsBox').classList.add('show');
+            }
+        }
+        else if (reactPhase === 'cooling' && loggerOn) {
+            curTemp = coolStartTemp + WARM_RATE * (simTime - tCoolStart);
+        }
+        if (loggerOn && (simTime - lastRecordT) >= RECORD_INTERVAL) {
+            recordPoint();
+        }
+        updateReadouts();
+        renderer.render(scene, camera);
+    }
+    window.startLogger = function () {
+        if (reactPhase !== 'idle')
+            return;
+        loggerOn = true;
+        reactPhase = 'baseline';
+        simTime = 0;
+        lastRecordT = -999;
+        dataPoints = [];
+        recordPoint();
+        document.getElementById('btnStartLogger').disabled = true;
+        document.getElementById('btnStart').disabled = false;
+        document.getElementById('btnStopLogger').disabled = false;
+    };
+    window.startReaction = function () {
+        if (reactPhase !== 'baseline' || !loggerOn)
+            return;
+        reactPhase = 'pouring';
+        phaseStart = performance.now();
+        document.getElementById('btnStart').disabled = true;
+    };
+    window.stopLogger = function () {
+        if (!loggerOn)
+            return;
+        loggerOn = false;
+        document.getElementById('btnStopLogger').disabled = true;
+        if (reactPhase === 'cooling' && dataPoints.some(p => p.phase === 'cooling')) {
+            document.getElementById('btnExtrapolate').disabled = false;
+        }
+    };
+    window.extrapolateCooling = function () {
+        const pts = dataPoints.filter(p => p.phase === 'cooling');
+        if (pts.length < 2)
+            return;
+        const n = pts.length;
+        let sumT = 0, sumY = 0, sumTT = 0, sumTY = 0;
+        pts.forEach(p => { sumT += p.t; sumY += p.T; sumTT += p.t * p.t; sumTY += p.t * p.T; });
+        const m = (n * sumTY - sumT * sumY) / (n * sumTT - sumT * sumT);
+        const c = (sumY - m * sumT) / n;
+        extrapolation = { m, c };
+        drawGraph();
+        const correctedTemp = m * tPourStart + c;
+        const correctedDeltaT = correctedTemp - INITIAL_TEMP;
+        const sign = c >= 0 ? '+' : '\u2212';
+        document.getElementById('resEquation').textContent = 'T = ' + m.toFixed(4) + 't ' + sign + ' ' + Math.abs(c).toFixed(2);
+        document.getElementById('resTUsed').textContent = tPourStart.toFixed(1) + ' s';
+        document.getElementById('resCorrectedTemp').textContent = fmtTemp(correctedTemp);
+        document.getElementById('resCorrectedDeltaT').textContent = Math.abs(correctedDeltaT).toFixed(1) + ' \u00b0C';
+        document.getElementById('extrapolateResult').style.display = 'block';
+    };
+    let seeThrough = false;
+    window.toggleSeeThrough = function () {
+        seeThrough = !seeThrough;
+        foamMat.opacity = seeThrough ? 0.15 : 1;
+        const btn = document.getElementById('btnSeeThrough');
+        btn.textContent = seeThrough ? 'Hide Contents (Restore Cup)' : 'Make Cup See-Through';
+    };
+    let zoomedIntoGraph = false;
+    let savedCam = null;
+    window.toggleZoomGraph = function () {
+        zoomedIntoGraph = !zoomedIntoGraph;
+        const btn = document.getElementById('btnZoomGraph');
+        if (zoomedIntoGraph) {
+            savedCam = { theta, phi, radius, target: target.clone() };
+            const screenTarget = new THREE.Vector3(loggerX, loggerBody.position.y + 0.05, 0.125);
+            tweenCamTo(0, Math.PI / 2, 1.7, screenTarget, 900);
+            btn.textContent = 'Show Full Setup';
+        }
+        else {
+            tweenCamTo(savedCam.theta, savedCam.phi, savedCam.radius, savedCam.target, 900);
+            btn.textContent = 'Zoom Into Graph';
+        }
+    };
+    window.resetSimulation = function () {
+        reactPhase = 'idle';
+        loggerOn = false;
+        simTime = 0;
+        lastRecordT = -999;
+        dataPoints = [];
+        tPourStart = null;
+        tCoolStart = null;
+        if (zoomedIntoGraph && savedCam) {
+            zoomedIntoGraph = false;
+            camAnim = null;
+            theta = savedCam.theta;
+            phi = savedCam.phi;
+            radius = savedCam.radius;
+            target.copy(savedCam.target);
+            updateCam();
+            document.getElementById('btnZoomGraph').textContent = 'Zoom Into Graph';
+        }
+        extrapolation = null;
+        curTemp = INITIAL_TEMP;
+        curVol = 50.0;
+        setLiquidHeight(LIQUID_H);
+        crystals.forEach(p => {
+            p.mesh.visible = false;
+            p.mesh.scale.setScalar(1);
+            p.mesh.position.copy(p.abovePos);
+            p.settled = false;
+            p.orbitAngle = Math.atan2(p.restPos.z, p.restPos.x - cupX);
+        });
+        updateZincReaction(0);
+        seeThrough = false;
+        foamMat.opacity = 1;
+        document.getElementById('btnSeeThrough').textContent = 'Make Cup See-Through';
+        document.getElementById('btnStartLogger').disabled = false;
+        document.getElementById('btnStart').disabled = true;
+        document.getElementById('btnStopLogger').disabled = true;
+        document.getElementById('btnExtrapolate').disabled = true;
+        document.getElementById('resultsBox').classList.remove('show');
+        document.getElementById('extrapolateResult').style.display = 'none';
+        updateReadouts();
+        drawGraph();
+    };
+    document.getElementById('initTemp').textContent = fmtTemp(INITIAL_TEMP);
+    updateReadouts();
+    requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="robots" content="noindex, nofollow, noarchive">
+<script>
+(function(){
+  document.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+  document.addEventListener('keydown', function(e){
+    var k = e.key;
+    var blockedKey = (k === 'F12');
+    var blockedCombo = (e.ctrlKey || e.metaKey) && (
+      k === 'u' || k === 'U' ||
+      k === 's' || k === 'S' ||
+      (e.shiftKey && (k === 'i' || k === 'I' || k === 'j' || k === 'J' || k === 'c' || k === 'C'))
+    );
+    if (blockedKey || blockedCombo) e.preventDefault();
+  });
+})();
+</script>
+<meta charset="UTF-8">
+<title>Reaction Mechanism &amp; Energy Profile — A-B + C &rarr; A + B-C</title>
+<style>
+  body { background:#000; font-family:-apple-system,'Segoe UI',sans-serif; margin:0; padding:24px; }
+  .wrap { max-width:900px; margin:0 auto; }
+  h1 { color:#FFFA1A; text-align:center; font-size:19px; font-weight:600; letter-spacing:0.3px;
+       text-shadow:0 0 6px rgba(255,250,26,0.85), 0 0 16px rgba(255,250,26,0.5); margin:0 0 4px; }
+  .subtitle { color:#666; text-align:center; font-size:12px; margin:0 0 16px; }
+  .card { background:#050505; border:1px solid #222; border-radius:12px; padding:18px 16px; box-shadow:0 0 20px rgba(0,240,255,0.08); }
+  canvas { width:100%; height:auto; display:block; background:#000; border-radius:8px; }
+  .controls { display:flex; gap:12px; margin-top:18px; flex-wrap:wrap; justify-content:center; }
+  button.simbtn { background:#0a0a0a; border-radius:8px; padding:11px 22px; font-size:14px; font-weight:700; cursor:pointer; transition:filter 0.15s; }
+  button.simbtn:hover:not(:disabled) { filter:brightness(1.3); }
+  button.simbtn:disabled { opacity:0.4; cursor:default; }
+  #btnStart { border:1.5px solid #39FF14; color:#39FF14; box-shadow:0 0 10px rgba(57,255,20,0.4); }
+  #btnReset { border:1.5px solid #FF2DD7; color:#FF2DD7; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Reaction Mechanism &amp; Energy Profile</h1>
+  <p class="subtitle">A&ndash;B + C &rarr; A + B&ndash;C, shown in slow motion alongside its live energy profile</p>
+  <div class="card">
+    <canvas id="cv" width="900" height="640"></canvas>
+    <div class="controls">
+      <button class="simbtn" id="btnStart" onclick="startReaction()">Start Reaction</button>
+      <button class="simbtn" id="btnReset" onclick="resetReaction()">Reset</button>
+    </div>
+  </div>
+</div>
+
+<script>"use strict";
+(function () {
+    const canvas = document.getElementById('cv');
+    const ctx = canvas.getContext('2d');
+    const W = 900, H = 640;
+    const MOL_TOP = 18, MOL_BOTTOM = 270;
+    const molY = (MOL_TOP + MOL_BOTTOM) / 2 + 6;
+    const EN_pl = 95, EN_pr = 40, EN_pt = 300, EN_pb = 90;
+    const ex0 = EN_pl, ey0 = EN_pt, ex1 = W - EN_pr, ey1 = H - EN_pb;
+    const enPlotW = ex1 - ex0, enPlotH = ey1 - ey0;
+    const COLOR_A = '#FFB800';
+    const COLOR_B = '#00D9FF';
+    const COLOR_C = '#FF2DD7';
+    const CURVE_COLOR = '#4D8CFF';
+    const R = 24;
+    const xReactStart = 0.05, xRiseStart = 0.25, xPeak = 0.5, xFallEnd = 0.75, xProdEnd = 0.95;
+    const yReact = 0.18, yProd = 0.06, yPeak = 0.92;
+    function smoothstep(a, b, t) { if (a === b)
+        return t < a ? 0 : 1; t = Math.min(1, Math.max(0, (t - a) / (b - a))); return t * t * (3 - 2 * t); }
+    function curveEnergy(f) {
+        if (f < xReactStart)
+            return yReact;
+        if (f < xRiseStart)
+            return yReact;
+        if (f < xPeak)
+            return yReact + (yPeak - yReact) * smoothstep(xRiseStart, xPeak, f);
+        if (f < xFallEnd)
+            return yPeak + (yProd - yPeak) * smoothstep(xPeak, xFallEnd, f);
+        return yProd;
+    }
+    function EX(f) { return ex0 + f * enPlotW; }
+    function EY(v) { return ey1 - v * enPlotH; }
+    function roundRect(x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+    }
+    function textBg(x, y, text, color, fontSize, align, alpha) {
+        fontSize = fontSize || 13;
+        align = align || 'center';
+        alpha = alpha === undefined ? 1 : alpha;
+        if (alpha <= 0.01)
+            return;
+        ctx.font = 'bold ' + fontSize + 'px sans-serif';
+        const tw = ctx.measureText(text).width, padX = 8, padY = 6;
+        let boxX = align === 'center' ? x - tw / 2 - padX : (align === 'left' ? x - padX : x - tw - padX);
+        const boxY = y - fontSize * 0.8 - padY;
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = 'rgba(0,0,0,0.88)';
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.3;
+        roundRect(boxX, boxY, tw + 2 * padX, fontSize + 2 * padY, 5);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.textAlign = align;
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(text, x, y);
+        ctx.globalAlpha = 1;
+    }
+    const bondLen = 52, separation = 150, approachDist = 230;
+    function positions(t) {
+        const bx = W / 2;
+        const aSep = smoothstep(0.32, 0.85, t);
+        const cApp = smoothstep(0.15, 0.62, t);
+        const ax = bx - bondLen - separation * aSep;
+        const cx = bx + approachDist + (bondLen - approachDist) * cApp;
+        return { ax, bx, cx };
+    }
+    function bondStrengthAB(t) { return 1 - smoothstep(0.30, 0.70, t); }
+    function bondStrengthBC(t) { return smoothstep(0.30, 0.70, t); }
+    function drawAtom(x, label, color) {
+        ctx.beginPath();
+        ctx.arc(x, molY, R, 0, Math.PI * 2);
+        ctx.fillStyle = '#000';
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = color;
+        ctx.stroke();
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 14;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = color;
+        ctx.font = 'bold 18px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, x, molY + 1);
+    }
+    function drawBond(x1, x2, strength, color) {
+        if (strength <= 0.04)
+            return;
+        ctx.globalAlpha = Math.min(1, strength + 0.25);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        if (strength < 0.85)
+            ctx.setLineDash([7, 6]);
+        else
+            ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(x1 + R, molY);
+        ctx.lineTo(x2 - R, molY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+    }
+    function drawMolecularPanel(t) {
+        ctx.fillStyle = '#00F0FF';
+        ctx.font = 'bold 15px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText('Molecular View', W / 2, MOL_TOP + 2);
+        const { ax, bx, cx } = positions(t);
+        const sAB = bondStrengthAB(t), sBC = bondStrengthBC(t);
+        drawBond(ax, bx, sAB, COLOR_A);
+        drawBond(bx, cx, sBC, COLOR_C);
+        drawAtom(ax, 'A', COLOR_A);
+        drawAtom(bx, 'B', COLOR_B);
+        drawAtom(cx, 'C', COLOR_C);
+        const tsAlpha = smoothstep(0.40, 0.50, t) * (1 - smoothstep(0.60, 0.72, t));
+        if (tsAlpha > 0.02) {
+            textBg(W / 2, MOL_TOP + 52, 'Transition State', '#FFFFFF', 14, 'center', tsAlpha);
+        }
+    }
+    function drawEnergyPanel(t) {
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.moveTo(ex0, ey1);
+        ctx.lineTo(ex0, ey0 - 8);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(ex0, ey1);
+        ctx.lineTo(ex1 + 10, ey1);
+        ctx.stroke();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.moveTo(ex0, ey0 - 16);
+        ctx.lineTo(ex0 - 5, ey0 - 6);
+        ctx.lineTo(ex0 + 5, ey0 - 6);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(ex1 + 18, ey1);
+        ctx.lineTo(ex1 + 8, ey1 - 5);
+        ctx.lineTo(ex1 + 8, ey1 + 5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#00F0FF';
+        ctx.font = 'bold 14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Reaction Coordinate', (ex0 + ex1) / 2, H - 16);
+        ctx.save();
+        ctx.translate(22, (ey0 + ey1) / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillText('Potential Energy', 0, 0);
+        ctx.restore();
+        ctx.strokeStyle = CURVE_COLOR;
+        ctx.lineWidth = 3.2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        const N = 160;
+        for (let i = 0; i <= N; i++) {
+            const f = i / N, v = curveEnergy(f);
+            const px = EX(f), py = EY(v);
+            if (i === 0)
+                ctx.moveTo(px, py);
+            else
+                ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.moveTo(EX(xReactStart), EY(yReact));
+        ctx.lineTo(EX(xRiseStart), EY(yReact));
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(EX(xFallEnd), EY(yProd));
+        ctx.lineTo(EX(xProdEnd), EY(yProd));
+        ctx.stroke();
+        const f = t;
+        const mx = EX(f), my = EY(curveEnergy(f));
+        ctx.beginPath();
+        ctx.arc(mx, my, 7, 0, Math.PI * 2);
+        ctx.fillStyle = '#39FF14';
+        ctx.fill();
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        const reactAlpha = smoothstep(0.0, 0.06, t);
+        const tsLabelAlpha = smoothstep(0.42, 0.5, t);
+        const prodAlpha = smoothstep(0.88, 1.0, t);
+        textBg(EX(xReactStart), EY(yReact) - 16, 'A-B + C', '#ffffff', 13, 'left', reactAlpha);
+        textBg(EX(xPeak), EY(yPeak) - 16, 'A---B---C', '#ffffff', 13, 'center', tsLabelAlpha);
+        textBg(EX(xProdEnd), EY(yProd) - 16, 'A + B-C', '#ffffff', 13, 'right', prodAlpha);
+    }
+    function draw(t) {
+        ctx.clearRect(0, 0, W, H);
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, W, H);
+        drawMolecularPanel(t);
+        drawEnergyPanel(t);
+    }
+    const T_APPROACH = 3200;
+    const T_PAUSE = 1800;
+    const T_SEPARATE = 3200;
+    let phase = 'idle';
+    let phaseStart = 0;
+    let rafId = null;
+    function easeInOut(x) { return x * x * (3 - 2 * x); }
+    function tick(now) {
+        let t = 0;
+        if (phase === 'idle') {
+            t = 0;
+        }
+        else if (phase === 'approach') {
+            const p = Math.min(1, (now - phaseStart) / T_APPROACH);
+            t = 0.5 * easeInOut(p);
+            if (p >= 1) {
+                phase = 'pause';
+                phaseStart = now;
+            }
+        }
+        else if (phase === 'pause') {
+            t = 0.5;
+            if (now - phaseStart >= T_PAUSE) {
+                phase = 'separate';
+                phaseStart = now;
+            }
+        }
+        else if (phase === 'separate') {
+            const p = Math.min(1, (now - phaseStart) / T_SEPARATE);
+            t = 0.5 + 0.5 * easeInOut(p);
+            if (p >= 1) {
+                phase = 'done';
+            }
+        }
+        else if (phase === 'done') {
+            t = 1;
+        }
+        draw(t);
+        if (phase !== 'done' && phase !== 'idle') {
+            rafId = requestAnimationFrame(tick);
+        }
+        else {
+            rafId = null;
+            document.getElementById('btnStart').disabled = (phase === 'done');
+        }
+    }
+    window.startReaction = function () {
+        if (phase === 'approach' || phase === 'pause' || phase === 'separate')
+            return;
+        phase = 'approach';
+        phaseStart = performance.now();
+        document.getElementById('btnStart').disabled = true;
+        rafId = requestAnimationFrame(tick);
+    };
+    window.resetReaction = function () {
+        if (rafId)
+            cancelAnimationFrame(rafId);
+        phase = 'idle';
+        document.getElementById('btnStart').disabled = false;
+        draw(0);
+    };
+    draw(0);
+})();
+</script>
+</body>
+</html>

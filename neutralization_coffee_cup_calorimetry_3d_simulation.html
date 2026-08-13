@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="robots" content="noindex, nofollow, noarchive">
+<script>
+(function(){
+  document.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+  document.addEventListener('keydown', function(e){
+    var k = e.key;
+    var blockedKey = (k === 'F12');
+    var blockedCombo = (e.ctrlKey || e.metaKey) && (
+      k === 'u' || k === 'U' ||
+      k === 's' || k === 'S' ||
+      (e.shiftKey && (k === 'i' || k === 'I' || k === 'j' || k === 'J' || k === 'c' || k === 'C'))
+    );
+    if (blockedKey || blockedCombo) e.preventDefault();
+  });
+})();
+</script>
+<meta charset="UTF-8">
+<title>Enthalpy of Neutralization — Coffee Cup Calorimetry</title>
+<style>
+  body { background:#000; font-family:-apple-system,'Segoe UI',sans-serif; margin:0; padding:24px; }
+  .wrap { max-width:1000px; margin:0 auto; }
+  h1 { color:#FFFA1A; text-align:center; font-size:19px; font-weight:600; letter-spacing:0.3px;
+       text-shadow:0 0 6px rgba(255,250,26,0.85), 0 0 16px rgba(255,250,26,0.5); margin:0 0 4px; }
+  .subtitle { color:#666; text-align:center; font-size:12px; margin:0 0 14px; }
+
+  .equationRow { display:flex; align-items:flex-end; justify-content:center; gap:14px; margin:0 0 16px; flex-wrap:wrap; }
+  .reactantCol { display:flex; flex-direction:column; align-items:center; }
+  .reactantCol .formula { color:#00F0FF; font-size:16px; font-weight:700; text-shadow:0 0 6px rgba(0,240,255,0.6); }
+  .reactantCol .stats { color:#FFD23C; font-size:11px; margin-top:3px; text-shadow:0 0 4px rgba(255,210,60,0.4); }
+  .equationRow .plus, .equationRow .arrow { color:#00F0FF; font-size:16px; font-weight:700; padding-bottom:16px; }
+  .equationRow .products { color:#00F0FF; font-size:16px; font-weight:700; text-shadow:0 0 6px rgba(0,240,255,0.6); padding-bottom:16px; }
+
+  .card { background:#050505; border:1px solid #222; border-radius:12px; padding:18px 16px; box-shadow:0 0 20px rgba(0,240,255,0.08); }
+  #stageWrap { position:relative; width:100%; }
+  canvas#three-canvas { width:100%; height:560px; display:block; border-radius:8px; background:#000; }
+
+  .readouts { display:flex; gap:12px; margin-top:16px; flex-wrap:wrap; justify-content:center; font-size:12.5px; }
+  .readoutBox { background:#070707; border:1px solid #1c1c1c; border-radius:8px; padding:8px 14px; text-align:center; min-width:130px; }
+  .readoutBox .lbl { color:#888; font-size:10.5px; text-transform:uppercase; letter-spacing:0.4px; }
+  .readoutBox .val { font-weight:700; font-size:15px; margin-top:2px; }
+
+  .controls { display:flex; align-items:center; gap:12px; margin-top:16px; flex-wrap:wrap; justify-content:center; }
+  button.simbtn { background:#0a0a0a; border-radius:8px; padding:11px 22px; font-size:14px; font-weight:700; cursor:pointer; transition:filter 0.15s; }
+  button.simbtn:hover:not(:disabled) { filter:brightness(1.3); }
+  button.simbtn:disabled { opacity:0.4; cursor:default; }
+  #btnStart { border:1.5px solid #FF6A00; color:#FF6A00; box-shadow:0 0 10px rgba(255,106,0,0.4); }
+  #btnSeeThrough { border:1.5px solid #39FFE8; color:#39FFE8; }
+  #btnReset { border:1.5px solid #FFD23C; color:#FFD23C; }
+
+  .resultsBox { margin-top:16px; padding:12px 14px; border-radius:8px; background:#070707; border:1px solid #1c1c1c;
+                color:#fff; font-size:12.5px; line-height:1.6; text-align:center; display:none; }
+  .resultsBox.show { display:block; }
+  .resultsBox b { color:#39FF14; }
+
+  .footnote { color:#888; font-size:12px; margin-top:14px; line-height:1.55; }
+
+  .slider-row-v { position:absolute; left:0px; top:50%; transform:translateY(-50%); z-index:6;
+                  display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .slider-row-v span { color:#39FFE8; font-size:13px; line-height:1; }
+  #panSlider { writing-mode: vertical-lr; direction:rtl; width:6px; height:140px; accent-color:#39FFE8; cursor:pointer; }
+  .slider-row-h { position:absolute; left:50%; bottom:10px; transform:translateX(-50%); z-index:6;
+                  display:flex; align-items:center; gap:6px; }
+  .slider-row-h span { color:#39FFE8; font-size:13px; line-height:1; }
+  #panSliderX { width:150px; accent-color:#39FFE8; cursor:pointer; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Enthalpy of Neutralization</h1>
+  <p class="subtitle">Determining the heat released when hydrochloric acid neutralizes sodium hydroxide, using a coffee cup calorimeter</p>
+
+  <div class="equationRow">
+    <div class="reactantCol">
+      <div class="formula">HCl(aq)</div>
+      <div class="stats">1.0 mol dm&#8315;&#179;, 25.0 cm&#179;</div>
+    </div>
+    <div class="plus">+</div>
+    <div class="reactantCol">
+      <div class="formula">NaOH(aq)</div>
+      <div class="stats">1.0 mol dm&#8315;&#179;, 25.0 cm&#179;</div>
+    </div>
+    <div class="arrow">&rarr;</div>
+    <div class="products">NaCl(aq) + H&#8322;O(l)</div>
+  </div>
+
+  <div class="card">
+    <div id="stageWrap">
+      <canvas id="three-canvas"></canvas>
+
+      <div class="slider-row-v">
+        <span>&uarr;</span>
+        <input type="range" id="panSlider" min="-3" max="3" step="0.05" value="0" oninput="onPanSlider(this.value)" aria-label="Scroll the view up or down">
+        <span>&darr;</span>
+      </div>
+      <div class="slider-row-h">
+        <span>&larr;</span>
+        <input type="range" id="panSliderX" min="-3" max="3" step="0.05" value="0" oninput="onPanSliderX(this.value)" aria-label="Scroll the view left or right">
+        <span>&rarr;</span>
+      </div>
+    </div>
+
+    <div class="readouts">
+      <div class="readoutBox"><div class="lbl">Initial Temp (NaOH)</div><div class="val" style="color:#FF3B3B" id="initTemp">19.5 &deg;C</div></div>
+      <div class="readoutBox"><div class="lbl">Current Temp</div><div class="val" style="color:#FF3B3B" id="curTemp">19.5 &deg;C</div></div>
+      <div class="readoutBox"><div class="lbl">Total Volume</div><div class="val" style="color:#00D9FF" id="curVol">25.0 cm&#179;</div></div>
+    </div>
+
+    <div class="controls">
+      <button class="simbtn" id="btnStart" onclick="startReaction()">Start Reaction</button>
+      <button class="simbtn" id="btnSeeThrough" onclick="toggleSeeThrough()">Make Cup See-Through</button>
+      <button class="simbtn" id="btnReset" onclick="resetSimulation()">Reset</button>
+    </div>
+
+    <div class="resultsBox" id="resultsBox">
+      Initial temperature: <b id="resInitTemp">--</b> &nbsp;|&nbsp;
+      Final temperature: <b id="resFinalTemp">--</b><br>
+      Temperature change (&Delta;T): <b id="resDeltaT">--</b>
+    </div>
+
+    <p class="footnote">The sodium hydroxide sits in the insulating polystyrene cup and its temperature is recorded first. The hydrochloric acid is then added, and the magnetic stirrer keeps the mixture uniform as the two neutralize. The temperature rise, combined with the known moles of acid and base reacted, is what lets the molar enthalpy of neutralization be calculated afterwards. Heat losses to the cup and surroundings are ignored here, which is why a simple set-up like this gives a value somewhat less exergonic than the true (data book) value of about &minus;57.3 kJ mol&#8315;&sup1;.</p>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>"use strict";
+(function () {
+    const canvas = document.getElementById('three-canvas');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x000000);
+    const camera = new THREE.PerspectiveCamera(45, canvas.clientWidth / canvas.clientHeight, 0.1, 100);
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    function resize() {
+        const w = canvas.clientWidth, h = canvas.clientHeight || 560;
+        renderer.setSize(w, h, false);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', resize);
+    scene.add(new THREE.AmbientLight(0x99aabb, 1.5));
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.0);
+    keyLight.position.set(4, 8, 5);
+    scene.add(keyLight);
+    const rimLight = new THREE.DirectionalLight(0x5cc3ff, 1.0);
+    rimLight.position.set(-5, 3, -4);
+    scene.add(rimLight);
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    fillLight.position.set(0, 4, 8);
+    scene.add(fillLight);
+    let theta = 0.35, phi = 1.15, radius = 10;
+    const target = new THREE.Vector3(0, 1.8, 0);
+    const BASE_TARGET_X = 0, BASE_TARGET_Y = 1.8;
+    function updateCam() {
+        camera.position.set(target.x + radius * Math.sin(phi) * Math.sin(theta), target.y + radius * Math.cos(phi), target.z + radius * Math.sin(phi) * Math.cos(theta));
+        camera.lookAt(target);
+    }
+    updateCam();
+    let dragging = false, lastX = 0, lastY = 0;
+    canvas.addEventListener('pointerdown', e => { dragging = true; lastX = e.clientX; lastY = e.clientY; });
+    window.addEventListener('pointerup', () => dragging = false);
+    window.addEventListener('pointermove', e => {
+        if (!dragging)
+            return;
+        const dx = e.clientX - lastX, dy = e.clientY - lastY;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        theta -= dx * 0.006;
+        phi = Math.min(2.5, Math.max(0.3, phi - dy * 0.006));
+        updateCam();
+    });
+    canvas.addEventListener('wheel', e => {
+        e.preventDefault();
+        radius = Math.min(20, Math.max(4, radius + e.deltaY * 0.01));
+        updateCam();
+    }, { passive: false });
+    window.onPanSlider = function (v) { target.y = BASE_TARGET_Y - parseFloat(v); updateCam(); };
+    window.onPanSliderX = function (v) { target.x = BASE_TARGET_X + parseFloat(v); updateCam(); };
+    const rig = new THREE.Group();
+    scene.add(rig);
+    const cupX = -0.6;
+    const stirrerBodyMat = new THREE.MeshStandardMaterial({ color: 0x2e2e32, roughness: 0.5, metalness: 0.3, emissive: 0x0a0a0c, emissiveIntensity: 0.3 });
+    const stirrerBody = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.55, 0.4, 32), stirrerBodyMat);
+    stirrerBody.position.set(cupX, 0.2, 0);
+    rig.add(stirrerBody);
+    const stirrerPlateMat = new THREE.MeshStandardMaterial({ color: 0x222224, roughness: 0.65, metalness: 0.1 });
+    const stirrerPlate = new THREE.Mesh(new THREE.CylinderGeometry(1.35, 1.35, 0.06, 32), stirrerPlateMat);
+    stirrerPlate.position.set(cupX, 0.43, 0);
+    rig.add(stirrerPlate);
+    const knobMat = new THREE.MeshStandardMaterial({ color: 0x8a8a8a, roughness: 0.4, metalness: 0.5 });
+    const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.1, 20), knobMat);
+    knob.rotation.z = Math.PI / 2;
+    knob.position.set(cupX, 0.28, 1.44);
+    rig.add(knob);
+    const dial = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.11, 0.02), new THREE.MeshStandardMaterial({ color: 0xff3b3b }));
+    dial.position.set(cupX, 0.28, 1.5);
+    rig.add(dial);
+    const speedKnobX = cupX + 0.95, speedKnobZ = 0.5;
+    const speedKnobBaseMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1e, roughness: 0.5, metalness: 0.3 });
+    const speedKnobBase = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.17, 0.05, 24), speedKnobBaseMat);
+    speedKnobBase.position.set(speedKnobX, 0.46 + 0.025, speedKnobZ);
+    rig.add(speedKnobBase);
+    const speedKnobMat = new THREE.MeshStandardMaterial({ color: 0x3a3a3e, roughness: 0.35, metalness: 0.5 });
+    const speedKnob = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.09, 24), speedKnobMat);
+    speedKnob.position.set(speedKnobX, 0.46 + 0.09, speedKnobZ);
+    rig.add(speedKnob);
+    const speedKnobPointer = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.01, 0.1), new THREE.MeshStandardMaterial({ color: 0xe0e0e0, roughness: 0.3 }));
+    speedKnobPointer.position.set(speedKnobX, 0.46 + 0.14, speedKnobZ - 0.06);
+    rig.add(speedKnobPointer);
+    const tickMat = new THREE.MeshStandardMaterial({ color: 0x666666 });
+    for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        const tick = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.012, 0.03), tickMat);
+        tick.position.set(speedKnobX + Math.sin(a) * 0.19, 0.46 + 0.03, speedKnobZ + Math.cos(a) * 0.19);
+        tick.rotation.y = a;
+        rig.add(tick);
+    }
+    const cupBaseY = 0.46;
+    const CUP_R_TOP = 0.95, CUP_R_BOT = 0.85, CUP_H = 2.3;
+    const foamMat = new THREE.MeshStandardMaterial({
+        color: 0xaba290, roughness: 0.85, metalness: 0.0,
+        transparent: true, opacity: 1, side: THREE.DoubleSide
+    });
+    const cupWall = new THREE.Mesh(new THREE.CylinderGeometry(CUP_R_TOP, CUP_R_BOT, CUP_H, 32, 1, true), foamMat);
+    cupWall.position.set(cupX, cupBaseY + CUP_H / 2, 0);
+    rig.add(cupWall);
+    const cupBottom = new THREE.Mesh(new THREE.CylinderGeometry(CUP_R_BOT, CUP_R_BOT, 0.06, 32), foamMat);
+    cupBottom.position.set(cupX, cupBaseY, 0);
+    rig.add(cupBottom);
+    const cupRim = new THREE.Mesh(new THREE.TorusGeometry(CUP_R_TOP, 0.03, 8, 32), foamMat);
+    cupRim.rotation.x = Math.PI / 2;
+    cupRim.position.set(cupX, cupBaseY + CUP_H, 0);
+    rig.add(cupRim);
+    const LIQUID_BASE_Y = cupBaseY + 0.05;
+    const LIQUID_H_INITIAL = 0.85;
+    const LIQUID_H_FINAL = 1.7;
+    const WALL_CLEARANCE = 0.9;
+    const liquidMat = new THREE.MeshPhysicalMaterial({
+        color: 0xd8f0ff, transparent: true, opacity: 0.5, roughness: 0.08, transmission: 0.6,
+        side: THREE.DoubleSide, depthWrite: false
+    });
+    let liquid = new THREE.Mesh(new THREE.CylinderGeometry(CUP_R_BOT * WALL_CLEARANCE, CUP_R_BOT * WALL_CLEARANCE, 0.001, 32), liquidMat);
+    rig.add(liquid);
+    function setLiquidHeight(h) {
+        h = Math.max(0.001, h);
+        const topRadiusAtH = CUP_R_BOT + (CUP_R_TOP - CUP_R_BOT) * (h / CUP_H);
+        rig.remove(liquid);
+        liquid.geometry.dispose();
+        liquid = new THREE.Mesh(new THREE.CylinderGeometry(topRadiusAtH * WALL_CLEARANCE, CUP_R_BOT * WALL_CLEARANCE, h, 32), liquidMat);
+        liquid.position.set(cupX, LIQUID_BASE_Y + h / 2, 0);
+        rig.add(liquid);
+    }
+    setLiquidHeight(LIQUID_H_INITIAL);
+    const stirBarGroup = new THREE.Group();
+    stirBarGroup.position.set(cupX, LIQUID_BASE_Y + 0.07, 0);
+    rig.add(stirBarGroup);
+    const stirBarMat = new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.3, metalness: 0.1 });
+    const stirBarBody = new THREE.Mesh(new THREE.SphereGeometry(0.09, 16, 12), stirBarMat);
+    stirBarBody.scale.set(3.2, 1, 1);
+    stirBarGroup.add(stirBarBody);
+    const stirBarCapMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.4 });
+    const capL = new THREE.Mesh(new THREE.SphereGeometry(0.095, 12, 10), stirBarCapMat);
+    capL.position.set(-0.22, 0, 0);
+    capL.scale.set(0.5, 1, 1);
+    stirBarGroup.add(capL);
+    const capR = new THREE.Mesh(new THREE.SphereGeometry(0.095, 12, 10), stirBarCapMat);
+    capR.position.set(0.22, 0, 0);
+    capR.scale.set(0.5, 1, 1);
+    stirBarGroup.add(capR);
+    const probeMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.3, metalness: 0.6 });
+    const PROBE_LEN = 1.9;
+    const initialSurfaceY = LIQUID_BASE_Y + LIQUID_H_INITIAL;
+    const probeTipY = initialSurfaceY - 0.3;
+    const probeCenterY = probeTipY + PROBE_LEN / 2;
+    const probe = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, PROBE_LEN, 12), probeMat);
+    probe.position.set(cupX + 0.3, probeCenterY, 0.25);
+    probe.rotation.z = 0.05;
+    rig.add(probe);
+    const probeTopY = probeCenterY + PROBE_LEN / 2;
+    function makeLCDTexture(text) {
+        const c = document.createElement('canvas');
+        c.width = 256;
+        c.height = 96;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#0a2a12';
+        ctx.fillRect(0, 0, 256, 96);
+        ctx.strokeStyle = '#39FF6A';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(3, 3, 250, 90);
+        ctx.fillStyle = '#39FF6A';
+        ctx.font = 'bold 46px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, 128, 50);
+        return new THREE.CanvasTexture(c);
+    }
+    const lcdMat = new THREE.MeshBasicMaterial({ map: makeLCDTexture('19.5C') });
+    const lcdDisplay = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.34), lcdMat);
+    lcdDisplay.position.set(cupX + 0.3, probeTopY + 0.25, 0.25);
+    rig.add(lcdDisplay);
+    const lcdBody = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.42, 0.1), new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.5, emissive: 0x111111, emissiveIntensity: 0.5 }));
+    lcdBody.position.set(cupX + 0.3, probeTopY + 0.25, 0.19);
+    rig.add(lcdBody);
+    const wireMat = new THREE.LineBasicMaterial({ color: 0x888888 });
+    const wireGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(cupX + 0.3, probeTopY, 0.25),
+        new THREE.Vector3(cupX + 0.3, probeTopY + 0.06, 0.25)
+    ]);
+    rig.add(new THREE.Line(wireGeo, wireMat));
+    const pourRestPos = new THREE.Vector3(cupX + 2.3, 0.46, 0);
+    const pourHoverPos = new THREE.Vector3(cupX + 0.15, cupBaseY + CUP_H + 1.05, 0);
+    const pourGroup = new THREE.Group();
+    pourGroup.position.copy(pourRestPos);
+    rig.add(pourGroup);
+    const CYL_R = 0.34, CYL_H = 1.9;
+    const cylGlassMat = new THREE.MeshPhysicalMaterial({
+        color: 0xcfe9ee, transparent: true, opacity: 0.2, roughness: 0.05, metalness: 0,
+        transmission: 0.65, thickness: 0.3, ior: 1.45, clearcoat: 1, clearcoatRoughness: 0.08,
+        side: THREE.DoubleSide, depthWrite: false
+    });
+    const cylBody = new THREE.Mesh(new THREE.CylinderGeometry(CYL_R, CYL_R * 0.92, CYL_H, 28, 1, true), cylGlassMat);
+    cylBody.position.set(0, CYL_H / 2, 0);
+    cylBody.renderOrder = 2;
+    pourGroup.add(cylBody);
+    const cylBase = new THREE.Mesh(new THREE.CylinderGeometry(CYL_R * 0.92, CYL_R * 0.92, 0.04, 28), cylGlassMat);
+    cylBase.position.set(0, 0.02, 0);
+    pourGroup.add(cylBase);
+    const acidMat = new THREE.MeshPhysicalMaterial({
+        color: 0xf7fbff, transparent: true, opacity: 0.55, roughness: 0.06, transmission: 0.55,
+        side: THREE.DoubleSide, depthWrite: false
+    });
+    const ACID_H_FULL = 1.5;
+    const acidLiquid = new THREE.Mesh(new THREE.CylinderGeometry(CYL_R * 0.85, CYL_R * 0.8, 1, 24), acidMat);
+    pourGroup.add(acidLiquid);
+    function setAcidHeight(h) {
+        acidLiquid.scale.y = Math.max(0.001, h);
+        acidLiquid.position.set(0, 0.04 + h / 2, 0);
+    }
+    setAcidHeight(ACID_H_FULL);
+    const streamMat = new THREE.MeshPhysicalMaterial({
+        color: 0xd8f0ff, transparent: true, opacity: 0, roughness: 0.1, transmission: 0.5,
+        side: THREE.DoubleSide, depthWrite: false
+    });
+    let stream = new THREE.Mesh(new THREE.BufferGeometry(), streamMat);
+    rig.add(stream);
+    const cupOpeningWorld = new THREE.Vector3(cupX, cupBaseY + CUP_H - 0.15, 0);
+    const _mouthLocal = new THREE.Vector3(0, CYL_H, 0);
+    const _mouthWorld = new THREE.Vector3();
+    const _midPoint = new THREE.Vector3();
+    function buildStreamGeometry(start, end) {
+        const dist = start.distanceTo(end);
+        _midPoint.copy(start).add(end).multiplyScalar(0.5);
+        _midPoint.y -= Math.min(0.55, 0.18 + dist * 0.12);
+        const curve = new THREE.QuadraticBezierCurve3(start.clone(), _midPoint.clone(), end.clone());
+        const tubularSegments = 18, radialSegments = 8;
+        const radiusStart = 0.05, radiusEnd = 0.022;
+        const geo = new THREE.TubeGeometry(curve, tubularSegments, radiusStart, radialSegments, false);
+        const posAttr = geo.attributes.position;
+        const vertsPerRing = radialSegments + 1;
+        const vertex = new THREE.Vector3();
+        const center = new THREE.Vector3();
+        for (let i = 0; i <= tubularSegments; i++) {
+            const t = i / tubularSegments;
+            const scale = THREE.MathUtils.lerp(1, radiusEnd / radiusStart, t);
+            center.copy(curve.getPointAt(t));
+            for (let j = 0; j < vertsPerRing; j++) {
+                const idx = i * vertsPerRing + j;
+                vertex.fromBufferAttribute(posAttr, idx);
+                vertex.sub(center).multiplyScalar(scale).add(center);
+                posAttr.setXYZ(idx, vertex.x, vertex.y, vertex.z);
+            }
+        }
+        posAttr.needsUpdate = true;
+        geo.computeVertexNormals();
+        return geo;
+    }
+    resize();
+    const INITIAL_TEMP = 19.5;
+    const FINAL_TEMP = 26.3;
+    const POUR_DURATION = 3600;
+    const MIX_DURATION = 3200;
+    let phase = 'idle';
+    let phaseStart = 0;
+    let curTemp = INITIAL_TEMP;
+    let curVol = 25.0;
+    function easeInOut(x) { return x * x * (3 - 2 * x); }
+    function fmtTemp(t) { return t.toFixed(1) + ' \u00b0C'; }
+    function fmtVol(v) { return v.toFixed(1) + ' cm\u00b3'; }
+    function updateReadouts() {
+        document.getElementById('curTemp').textContent = fmtTemp(curTemp);
+        document.getElementById('curVol').textContent = fmtVol(curVol);
+        lcdMat.map = makeLCDTexture(curTemp.toFixed(1) + 'C');
+        lcdMat.needsUpdate = true;
+    }
+    let lastFrame = performance.now();
+    function tick(now) {
+        requestAnimationFrame(tick);
+        const dt = Math.min(0.1, (now - lastFrame) / 1000);
+        lastFrame = now;
+        stirBarGroup.rotation.y += dt * 7.5;
+        if (phase === 'pouring') {
+            const p = Math.min(1, (now - phaseStart) / POUR_DURATION);
+            const MOVE_IN_END = 0.18, MOVE_OUT_START = 0.82;
+            let pourFraction = 0;
+            let tiltAngle = 0;
+            if (p < MOVE_IN_END) {
+                const t = easeInOut(p / MOVE_IN_END);
+                pourGroup.position.lerpVectors(pourRestPos, pourHoverPos, t);
+                tiltAngle = 0;
+            }
+            else if (p <= MOVE_OUT_START) {
+                pourGroup.position.copy(pourHoverPos);
+                const tp = (p - MOVE_IN_END) / (MOVE_OUT_START - MOVE_IN_END);
+                tiltAngle = Math.sin(tp * Math.PI) * 1.15;
+                pourFraction = easeInOut(tp);
+            }
+            else {
+                const t = easeInOut((p - MOVE_OUT_START) / (1 - MOVE_OUT_START));
+                pourGroup.position.lerpVectors(pourHoverPos, pourRestPos, t);
+                tiltAngle = 0;
+                pourFraction = 1;
+            }
+            pourGroup.rotation.z = tiltAngle;
+            setAcidHeight(ACID_H_FULL * (1 - pourFraction));
+            const liquidH = LIQUID_H_INITIAL + (LIQUID_H_FINAL - LIQUID_H_INITIAL) * pourFraction;
+            setLiquidHeight(liquidH);
+            curVol = 25.0 + 25.0 * pourFraction;
+            updateReadouts();
+            const pouring = (p >= MOVE_IN_END && p <= MOVE_OUT_START && tiltAngle > 0.15);
+            streamMat.opacity = pouring ? 0.85 : 0;
+            if (pouring) {
+                pourGroup.updateMatrixWorld(true);
+                _mouthWorld.copy(_mouthLocal).applyMatrix4(pourGroup.matrixWorld);
+                stream.geometry.dispose();
+                stream.geometry = buildStreamGeometry(_mouthWorld, cupOpeningWorld);
+            }
+            if (p >= 1) {
+                phase = 'mixing';
+                phaseStart = now;
+                pourGroup.rotation.z = 0;
+                streamMat.opacity = 0;
+            }
+        }
+        else if (phase === 'mixing') {
+            const p = Math.min(1, (now - phaseStart) / MIX_DURATION);
+            curTemp = INITIAL_TEMP + (FINAL_TEMP - INITIAL_TEMP) * easeInOut(p);
+            updateReadouts();
+            if (p >= 1) {
+                phase = 'done';
+                document.getElementById('resInitTemp').textContent = fmtTemp(INITIAL_TEMP);
+                document.getElementById('resFinalTemp').textContent = fmtTemp(FINAL_TEMP);
+                document.getElementById('resDeltaT').textContent = '+' + (FINAL_TEMP - INITIAL_TEMP).toFixed(1) + ' \u00b0C';
+                document.getElementById('resultsBox').classList.add('show');
+            }
+        }
+        renderer.render(scene, camera);
+    }
+    window.startReaction = function () {
+        if (phase !== 'idle')
+            return;
+        phase = 'pouring';
+        phaseStart = performance.now();
+        document.getElementById('btnStart').disabled = true;
+    };
+    let seeThrough = false;
+    window.toggleSeeThrough = function () {
+        seeThrough = !seeThrough;
+        foamMat.opacity = seeThrough ? 0.15 : 1;
+        const btn = document.getElementById('btnSeeThrough');
+        btn.textContent = seeThrough ? 'Hide Contents (Restore Cup)' : 'Make Cup See-Through';
+    };
+    window.resetSimulation = function () {
+        phase = 'idle';
+        curTemp = INITIAL_TEMP;
+        curVol = 25.0;
+        setLiquidHeight(LIQUID_H_INITIAL);
+        setAcidHeight(ACID_H_FULL);
+        pourGroup.rotation.z = 0;
+        pourGroup.position.copy(pourRestPos);
+        streamMat.opacity = 0;
+        seeThrough = false;
+        foamMat.opacity = 1;
+        document.getElementById('btnSeeThrough').textContent = 'Make Cup See-Through';
+        document.getElementById('btnStart').disabled = false;
+        document.getElementById('resultsBox').classList.remove('show');
+        updateReadouts();
+    };
+    document.getElementById('initTemp').textContent = fmtTemp(INITIAL_TEMP);
+    updateReadouts();
+    requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

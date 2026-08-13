@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="robots" content="noindex, nofollow, noarchive">
+<script>
+(function(){
+  document.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+  document.addEventListener('keydown', function(e){
+    var k = e.key;
+    var blockedKey = (k === 'F12');
+    var blockedCombo = (e.ctrlKey || e.metaKey) && (
+      k === 'u' || k === 'U' ||
+      k === 's' || k === 'S' ||
+      (e.shiftKey && (k === 'i' || k === 'I' || k === 'j' || k === 'J' || k === 'c' || k === 'C'))
+    );
+    if (blockedKey || blockedCombo) e.preventDefault();
+  });
+})();
+</script>
+<meta charset="UTF-8">
+<title>Chemistry Questions - Dark Mode</title>
+<style>
+  body {
+    background: #000;
+    color: #fff;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    margin: 0;
+    padding: 40px 20px;
+  }
+  .question-block {
+    max-width: 900px;
+    margin: 0 auto 70px auto;
+    padding-bottom: 50px;
+    border-bottom: 1px solid #333;
+  }
+  .question-block:last-child {
+    border-bottom: none;
+  }
+  .q-number {
+    color: #00F0FF;
+    font-size: 14px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .q-text {
+    font-size: 20px;
+    margin-bottom: 20px;
+    line-height: 1.4;
+  }
+  .diagram {
+    display: flex;
+    justify-content: center;
+    margin: 20px 0;
+  }
+  svg text { fill: #fff; font-family: 'Segoe UI', Arial, sans-serif; }
+  svg line, svg path, svg polyline { stroke: #fff; }
+  table {
+    border-collapse: collapse;
+    margin: 20px auto;
+    color: #fff;
+  }
+  table, th, td {
+    border: 1px solid #fff;
+  }
+  th, td {
+    padding: 10px 20px;
+    text-align: center;
+  }
+  th {
+    color: #00F0FF;
+  }
+  .options {
+    margin-top: 20px;
+    font-size: 18px;
+  }
+  .options div {
+    margin-bottom: 12px;
+    display: flex;
+  }
+  .letter {
+    color: #00F0FF;
+    font-weight: bold;
+    width: 30px;
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<!-- QUESTION 1 -->
+<div class="question-block">
+  <div class="q-number">Question</div>
+  <div class="q-text">What can be deduced from this reaction profile?</div>
+  <div class="diagram">
+    <svg width="500" height="380" viewBox="0 0 500 380">
+      <line x1="80" y1="30" x2="80" y2="330" stroke="#fff" stroke-width="2"/>
+      <line x1="80" y1="330" x2="460" y2="330" stroke="#fff" stroke-width="2"/>
+      <text x="30" y="180" font-size="16" transform="rotate(-90 30,180)">Enthalpy</text>
+      <text x="230" y="360" font-size="16">Reaction coordinate</text>
+      <line x1="110" y1="90" x2="220" y2="90" stroke="#fff" stroke-width="2"/>
+      <text x="110" y="78" font-size="16" text-decoration="underline">Reactants</text>
+      <line x1="110" y1="90" x2="110" y2="90"/>
+      <line x1="350" y1="230" x2="440" y2="230" stroke="#fff" stroke-width="2"/>
+      <text x="350" y="218" font-size="16" text-decoration="underline">Products</text>
+    </svg>
+  </div>
+  <div class="options">
+    <div><span class="letter">A.</span> The reactants are less stable than the products and the reaction is exothermic.</div>
+    <div><span class="letter">B.</span> The reactants are less stable than the products and the reaction is endothermic.</div>
+    <div><span class="letter">C.</span> The reactants are more stable than the products and the reaction is exothermic.</div>
+    <div><span class="letter">D.</span> The reactants are more stable than the products and the reaction is endothermic.</div>
+  </div>
+</div>
+
+<!-- QUESTION 2 -->
+<div class="question-block">
+  <div class="q-number">Question</div>
+  <div class="q-text">Which statement is correct for the reaction with this enthalpy level diagram?</div>
+  <div class="diagram">
+    <svg width="550" height="380" viewBox="0 0 550 380">
+      <line x1="80" y1="30" x2="80" y2="330" stroke="#fff" stroke-width="2"/>
+      <line x1="80" y1="330" x2="480" y2="330" stroke="#fff" stroke-width="2"/>
+      <text x="60" y="20" font-style="italic" font-size="18">H</text>
+      <text x="240" y="360" font-size="16">Reaction progress</text>
+      <line x1="110" y1="260" x2="190" y2="260" stroke="#fff" stroke-width="2"/>
+      <text x="110" y="248" font-size="16" text-decoration="underline">Reactants</text>
+      <path d="M190,260 C 230,260 240,80 300,80 C 340,80 340,150 370,170" fill="none" stroke="#fff" stroke-width="2"/>
+      <line x1="370" y1="170" x2="440" y2="170" stroke="#fff" stroke-width="2"/>
+      <text x="380" y="160" font-size="16" text-decoration="underline">Products</text>
+    </svg>
+  </div>
+  <div class="options">
+    <div><span class="letter">A.</span> Heat energy is released during the reaction and the reactants are more stable than the products.</div>
+    <div><span class="letter">B.</span> Heat energy is absorbed during the reaction and the reactants are more stable than the products.</div>
+    <div><span class="letter">C.</span> Heat energy is released during the reaction and the products are more stable than the reactants.</div>
+    <div><span class="letter">D.</span> Heat energy is absorbed during the reaction and the products are more stable than the reactants.</div>
+  </div>
+</div>
+
+<!-- QUESTION 3 -->
+<div class="question-block">
+  <div class="q-number">Question</div>
+  <div class="q-text">Consider the specific heat capacity of the following metals.</div>
+  <table>
+    <tr><th>Specific heat capacity / J kg<sup>-1</sup> K<sup>-1</sup></th><th>Metal</th></tr>
+    <tr><td>385</td><td>Cu</td></tr>
+    <tr><td>234</td><td>Ag</td></tr>
+    <tr><td>130</td><td>Au</td></tr>
+    <tr><td>134</td><td>Pt</td></tr>
+  </table>
+  <div class="q-text">Which metal will show the greatest temperature increase if 50 J of heat is supplied to a 0.001 kg sample of each metal at the same initial temperature?</div>
+  <div class="options">
+    <div><span class="letter">A.</span> Cu</div>
+    <div><span class="letter">B.</span> Ag</div>
+    <div><span class="letter">C.</span> Au</div>
+    <div><span class="letter">D.</span> Pt</div>
+  </div>
+</div>
+
+<!-- QUESTION 4 -->
+<div class="question-block">
+  <div class="q-number">Question</div>
+  <div class="q-text">Which is correct when Ba(OH)<sub>2</sub> reacts with NH<sub>4</sub>Cl?</div>
+  <div class="q-text" style="font-size:18px;">
+    Ba(OH)<sub>2</sub>(s) + 2NH<sub>4</sub>Cl(s) &rarr; BaCl<sub>2</sub>(aq) + 2NH<sub>3</sub>(g) + 2H<sub>2</sub>O(l)
+    &nbsp;&nbsp;&nbsp; &Delta;H&deg; = +164 kJ mol<sup>-1</sup>
+  </div>
+  <table>
+    <tr><th>&nbsp;</th><th>Temperature</th><th>Enthalpy</th><th>Stability</th></tr>
+    <tr><td>A.</td><td>increases</td><td>products have lower enthalpy than the reactants</td><td>products are less stable than the reactants</td></tr>
+    <tr><td>B.</td><td>decreases</td><td>products have lower enthalpy than the reactants</td><td>products are more stable than the reactants</td></tr>
+    <tr><td>C.</td><td>decreases</td><td>products have higher enthalpy than the reactants</td><td>products are less stable than the reactants</td></tr>
+    <tr><td>D.</td><td>increases</td><td>products have higher enthalpy than the reactants</td><td>products are more stable than the reactants</td></tr>
+  </table>
+</div>
+
+<!-- QUESTION 5 -->
+<div class="question-block">
+  <div class="q-number">Question</div>
+  <div class="q-text">When equal masses of X and Y absorb the same amount of energy, their temperatures rise by 5°C and 10°C respectively. Which is correct?</div>
+  <div class="options">
+    <div><span class="letter">A.</span> The specific heat capacity of X is twice that of Y.</div>
+    <div><span class="letter">B.</span> The specific heat capacity of X is half that of Y.</div>
+    <div><span class="letter">C.</span> The specific heat capacity of X is one fifth that of Y.</div>
+    <div><span class="letter">D.</span> The specific heat capacity of X is the same as Y.</div>
+  </div>
+</div>
+
+<!-- QUESTION 6 -->
+<div class="question-block">
+  <div class="q-number">Question</div>
+  <div class="q-text">An equation for a reaction in which hydrogen is formed is</div>
+  <div class="q-text" style="font-size:18px;">
+    CH<sub>4</sub> + H<sub>2</sub>O &rarr; 3H<sub>2</sub> + CO &nbsp;&nbsp;&nbsp; &Delta;H&deg; = +210 kJ
+  </div>
+  <div class="q-text">Which energy change occurs when 1 mol of hydrogen is formed in this reaction?</div>
+  <div class="options">
+    <div><span class="letter">A.</span> 70 kJ of energy are absorbed from the surroundings.</div>
+    <div><span class="letter">B.</span> 70 kJ of energy are released to the surroundings.</div>
+    <div><span class="letter">C.</span> 210 kJ of energy are absorbed from the surroundings.</div>
+    <div><span class="letter">D.</span> 210 kJ of energy are released to the surroundings.</div>
+  </div>
+</div>
+
+</body>
+</html>

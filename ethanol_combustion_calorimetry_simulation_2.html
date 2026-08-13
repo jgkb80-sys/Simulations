@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="robots" content="noindex, nofollow, noarchive">
+<script>
+(function(){
+  document.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+  document.addEventListener('keydown', function(e){
+    var k = e.key;
+    var blockedKey = (k === 'F12');
+    var blockedCombo = (e.ctrlKey || e.metaKey) && (
+      k === 'u' || k === 'U' ||
+      k === 's' || k === 'S' ||
+      (e.shiftKey && (k === 'i' || k === 'I' || k === 'j' || k === 'J' || k === 'c' || k === 'C'))
+    );
+    if (blockedKey || blockedCombo) e.preventDefault();
+  });
+})();
+</script>
+<meta charset="UTF-8">
+<title>Enthalpy of Combustion of Ethanol &mdash; Calorimetry</title>
+<style>
+  body { background:#000; font-family:-apple-system,'Segoe UI',sans-serif; margin:0; padding:24px; }
+  .wrap { max-width:1000px; margin:0 auto; }
+  h1 { color:#FFFA1A; text-align:center; font-size:19px; font-weight:600; letter-spacing:0.3px;
+       text-shadow:0 0 6px rgba(255,250,26,0.85), 0 0 16px rgba(255,250,26,0.5); margin:0 0 4px; }
+  .subtitle { color:#666; text-align:center; font-size:12px; margin:0 0 6px; }
+  .equation { text-align:center; color:#00F0FF; font-size:15px; font-weight:700; margin:0 0 16px;
+              text-shadow:0 0 6px rgba(0,240,255,0.6); }
+  .card { background:#050505; border:1px solid #222; border-radius:12px; padding:18px 16px; box-shadow:0 0 20px rgba(0,240,255,0.08); }
+  #stageWrap { position:relative; width:100%; }
+  canvas#three-canvas { width:100%; height:560px; display:block; border-radius:8px; background:#000; }
+
+  .readouts { display:flex; gap:12px; margin-top:16px; flex-wrap:wrap; justify-content:center; font-size:12.5px; }
+  .readoutBox { background:#070707; border:1px solid #1c1c1c; border-radius:8px; padding:8px 14px; text-align:center; min-width:130px; }
+  .readoutBox .lbl { color:#888; font-size:10.5px; text-transform:uppercase; letter-spacing:0.4px; }
+  .readoutBox .val { font-weight:700; font-size:15px; margin-top:2px; }
+
+  .controls { display:flex; align-items:center; gap:12px; margin-top:16px; flex-wrap:wrap; justify-content:center; }
+  button.simbtn { background:#0a0a0a; border-radius:8px; padding:11px 22px; font-size:14px; font-weight:700; cursor:pointer; transition:filter 0.15s; }
+  button.simbtn:hover:not(:disabled) { filter:brightness(1.3); }
+  button.simbtn:disabled { opacity:0.4; cursor:default; }
+  #btnStart { border:1.5px solid #FF6A00; color:#FF6A00; box-shadow:0 0 10px rgba(255,106,0,0.4); }
+  #btnStop { border:1.5px solid #FF2DD7; color:#FF2DD7; }
+
+  .resultsBox { margin-top:16px; padding:12px 14px; border-radius:8px; background:#070707; border:1px solid #1c1c1c;
+                color:#fff; font-size:12.5px; line-height:1.6; text-align:center; display:none; }
+  .resultsBox.show { display:block; }
+  .resultsBox b { color:#39FF14; }
+
+  .footnote { color:#888; font-size:12px; margin-top:14px; line-height:1.55; }
+
+  .slider-row-v { position:absolute; left:0px; top:50%; transform:translateY(-50%); z-index:6;
+                  display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .slider-row-v span { color:#39FFE8; font-size:13px; line-height:1; }
+  #panSlider { writing-mode: vertical-lr; direction:rtl; width:6px; height:140px; accent-color:#39FFE8; cursor:pointer; }
+  .slider-row-h { position:absolute; left:50%; bottom:10px; transform:translateX(-50%); z-index:6;
+                  display:flex; align-items:center; gap:6px; }
+  .slider-row-h span { color:#39FFE8; font-size:13px; line-height:1; }
+  #panSliderX { width:150px; accent-color:#39FFE8; cursor:pointer; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Enthalpy of Combustion of Ethanol</h1>
+  <p class="subtitle">Determining the heat released by burning ethanol using a simple copper calorimeter</p>
+  <p class="equation">C&#8322;H&#8325;OH(l) + 3O&#8322;(g) &rarr; 2CO&#8322;(g) + 3H&#8322;O(l)</p>
+
+  <div class="card">
+    <div id="stageWrap">
+      <canvas id="three-canvas"></canvas>
+
+      <div class="slider-row-v">
+        <span>&uarr;</span>
+        <input type="range" id="panSlider" min="-3" max="3" step="0.05" value="0" oninput="onPanSlider(this.value)" aria-label="Scroll the view up or down">
+        <span>&darr;</span>
+      </div>
+      <div class="slider-row-h">
+        <span>&larr;</span>
+        <input type="range" id="panSliderX" min="-3" max="3" step="0.05" value="0" oninput="onPanSliderX(this.value)" aria-label="Scroll the view left or right">
+        <span>&rarr;</span>
+      </div>
+    </div>
+
+    <div class="readouts">
+      <div class="readoutBox"><div class="lbl">Initial Mass (Burner + Ethanol)</div><div class="val" style="color:#FFD23C" id="initMass">150.00 g</div></div>
+      <div class="readoutBox"><div class="lbl">Current Mass</div><div class="val" style="color:#FFD23C" id="curMass">150.00 g</div></div>
+      <div class="readoutBox"><div class="lbl">Water Volume</div><div class="val" style="color:#00D9FF">100 cm&sup3;</div></div>
+      <div class="readoutBox"><div class="lbl">Initial Water Temp</div><div class="val" style="color:#FF3B3B" id="initTemp">20.0 &deg;C</div></div>
+      <div class="readoutBox"><div class="lbl">Current Water Temp</div><div class="val" style="color:#FF3B3B" id="curTemp">20.0 &deg;C</div></div>
+    </div>
+
+    <div class="controls">
+      <button class="simbtn" id="btnStart" onclick="startCombustion()">Start Combustion</button>
+      <button class="simbtn" id="btnStop" onclick="stopExperiment()" disabled>Stop Experiment</button>
+      <button class="simbtn" id="btnSeeThrough" onclick="toggleSeeThrough()" style="border-color:#39FFE8; color:#39FFE8;">Show Water Level (See-Through Can)</button>
+      <button class="simbtn" id="btnReset" onclick="resetSimulation()" style="border-color:#FFD23C; color:#FFD23C;">Reset</button>
+    </div>
+
+    <div class="resultsBox" id="resultsBox">
+      Final water temperature: <b id="resFinalTemp">--</b> &nbsp;|&nbsp;
+      Temperature change (&Delta;T): <b id="resDeltaT">--</b><br>
+      Final mass of burner + ethanol: <b id="resFinalMass">--</b> &nbsp;|&nbsp;
+      Mass of ethanol burned (&Delta;m): <b id="resDeltaM">--</b>
+    </div>
+
+    <p class="footnote">The spirit burner is weighed before and after burning &mdash; the mass lost is the mass of ethanol combusted. The temperature rise of the known volume of water, together with that mass loss, is what lets the energy released per gram (and per mole) of ethanol be calculated afterwards. Heat losses to the surroundings and to the copper can itself are ignored here, which is why the enthalpy change calculated from a simple set-up like this is always noticeably less exergonic than the true (data book) value.</p>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>"use strict";
+(function () {
+    const wrap = document.getElementById('stageWrap');
+    const canvas = document.getElementById('three-canvas');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x000000);
+    const camera = new THREE.PerspectiveCamera(45, canvas.clientWidth / canvas.clientHeight, 0.1, 100);
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    function resize() {
+        const w = canvas.clientWidth, h = canvas.clientHeight || 560;
+        renderer.setSize(w, h, false);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', resize);
+    scene.add(new THREE.AmbientLight(0x99aabb, 1.5));
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.0);
+    keyLight.position.set(4, 8, 5);
+    scene.add(keyLight);
+    const rimLight = new THREE.DirectionalLight(0x5cc3ff, 1.0);
+    rimLight.position.set(-5, 3, -4);
+    scene.add(rimLight);
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    fillLight.position.set(0, 4, 8);
+    scene.add(fillLight);
+    let theta = 0.35, phi = 1.15, radius = 11;
+    const target = new THREE.Vector3(0, 2.6, 0);
+    const BASE_TARGET_X = 0, BASE_TARGET_Y = 2.6;
+    function updateCam() {
+        camera.position.set(target.x + radius * Math.sin(phi) * Math.sin(theta), target.y + radius * Math.cos(phi), target.z + radius * Math.sin(phi) * Math.cos(theta));
+        camera.lookAt(target);
+    }
+    updateCam();
+    let dragging = false, lastX = 0, lastY = 0;
+    canvas.addEventListener('pointerdown', e => { dragging = true; lastX = e.clientX; lastY = e.clientY; });
+    window.addEventListener('pointerup', () => dragging = false);
+    window.addEventListener('pointermove', e => {
+        if (!dragging)
+            return;
+        const dx = e.clientX - lastX, dy = e.clientY - lastY;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        theta -= dx * 0.006;
+        phi = Math.min(2.5, Math.max(0.3, phi - dy * 0.006));
+        updateCam();
+    });
+    canvas.addEventListener('wheel', e => {
+        e.preventDefault();
+        radius = Math.min(22, Math.max(4, radius + e.deltaY * 0.01));
+        updateCam();
+    }, { passive: false });
+    window.onPanSlider = function (v) { target.y = BASE_TARGET_Y - parseFloat(v); updateCam(); };
+    window.onPanSliderX = function (v) { target.x = BASE_TARGET_X + parseFloat(v); updateCam(); };
+    const rig = new THREE.Group();
+    scene.add(rig);
+    const standX = 1.7;
+    const standMat = new THREE.MeshStandardMaterial({ color: 0x5a5a62, roughness: 0.35, metalness: 0.7, emissive: 0x0a0a10, emissiveIntensity: 0.4 });
+    const standBase = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 0.18, 24), standMat);
+    standBase.position.set(standX, 0.09, 0);
+    rig.add(standBase);
+    const standRod = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 6.2, 16), standMat);
+    standRod.position.set(standX, 3.1, 0);
+    rig.add(standRod);
+    const clampY = 3.7;
+    const boss = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.32, 0.32), standMat);
+    boss.position.set(standX, clampY, 0);
+    rig.add(boss);
+    const clampArmMat = new THREE.MeshStandardMaterial({ color: 0x6a6a72, roughness: 0.45, metalness: 0.6, emissive: 0x0a0a10, emissiveIntensity: 0.4 });
+    const CLAMP_RING_RADIUS = 1.02;
+    const clampArmLen = standX - (standX - 1.55 + CLAMP_RING_RADIUS);
+    const clampArm = new THREE.Mesh(new THREE.BoxGeometry(clampArmLen, 0.14, 0.14), clampArmMat);
+    clampArm.position.set(standX - clampArmLen / 2, clampY, 0);
+    rig.add(clampArm);
+    const clampRing = new THREE.Mesh(new THREE.TorusGeometry(CLAMP_RING_RADIUS, 0.055, 10, 32, Math.PI * 2), clampArmMat);
+    clampRing.rotation.x = Math.PI / 2;
+    clampRing.position.set(standX - 1.55, clampY, 0);
+    rig.add(clampRing);
+    const canX = standX - 1.55, canY0 = 2.85;
+    const copperMat = new THREE.MeshStandardMaterial({ color: 0xE0925A, roughness: 0.3, metalness: 0.8, emissive: 0x2a1400, emissiveIntensity: 0.3 });
+    const canOuterMat = new THREE.MeshStandardMaterial({ color: 0xE0925A, roughness: 0.3, metalness: 0.8, emissive: 0x2a1400, emissiveIntensity: 0.3, transparent: true, opacity: 1 });
+    const canOuter = new THREE.Mesh(new THREE.CylinderGeometry(0.92, 0.92, 1.9, 32, 1, true), canOuterMat);
+    canOuter.position.set(canX, canY0 + 0.95, 0);
+    rig.add(canOuter);
+    const canBase = new THREE.Mesh(new THREE.CylinderGeometry(0.92, 0.92, 0.06, 32), copperMat);
+    canBase.position.set(canX, canY0, 0);
+    rig.add(canBase);
+    const canRim = new THREE.Mesh(new THREE.TorusGeometry(0.92, 0.035, 8, 32), copperMat);
+    canRim.rotation.x = Math.PI / 2;
+    canRim.position.set(canX, canY0 + 1.9, 0);
+    rig.add(canRim);
+    const sootMat = new THREE.MeshBasicMaterial({ color: 0x0a0a0a, transparent: true, opacity: 0, depthWrite: false });
+    const sootBase = new THREE.Mesh(new THREE.CircleGeometry(0.95, 32), sootMat);
+    sootBase.rotation.x = -Math.PI / 2;
+    sootBase.position.set(canX, canY0 - 0.02, 0);
+    rig.add(sootBase);
+    const sootSideMat = new THREE.MeshBasicMaterial({ color: 0x0a0a0a, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false });
+    const sootSide = new THREE.Mesh(new THREE.CylinderGeometry(0.925, 0.925, 0.35, 32, 1, true), sootSideMat);
+    sootSide.position.set(canX, canY0 + 0.16, 0);
+    rig.add(sootSide);
+    const waterMat = new THREE.MeshPhysicalMaterial({
+        color: 0xAEE4FF, transparent: true, opacity: 0.55, roughness: 0.1, transmission: 0.55,
+        side: THREE.DoubleSide, depthWrite: false
+    });
+    const WATER_TOP_BASE = canY0 + 1.55;
+    const water = new THREE.Mesh(new THREE.CylinderGeometry(0.86, 0.86, WATER_TOP_BASE - (canY0 + 0.06), 32), waterMat);
+    water.position.set(canX, (WATER_TOP_BASE + canY0 + 0.06) / 2, 0);
+    rig.add(water);
+    const probeMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.3, metalness: 0.6 });
+    const probe = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 2.1, 12), probeMat);
+    probe.position.set(canX + 0.35, WATER_TOP_BASE - 0.5, 0.25);
+    probe.rotation.z = 0.06;
+    rig.add(probe);
+    function makeLCDTexture(text) {
+        const c = document.createElement('canvas');
+        c.width = 256;
+        c.height = 96;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#0a2a12';
+        ctx.fillRect(0, 0, 256, 96);
+        ctx.strokeStyle = '#39FF6A';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(3, 3, 250, 90);
+        ctx.fillStyle = '#39FF6A';
+        ctx.font = 'bold 46px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, 128, 50);
+        return new THREE.CanvasTexture(c);
+    }
+    const lcdMat = new THREE.MeshBasicMaterial({ map: makeLCDTexture('20.0C') });
+    const lcdDisplay = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.34), lcdMat);
+    lcdDisplay.position.set(canX + 0.35, WATER_TOP_BASE + 0.75, 0.25);
+    rig.add(lcdDisplay);
+    const lcdBody = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.42, 0.1), new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.5, emissive: 0x111111, emissiveIntensity: 0.5 }));
+    lcdBody.position.set(canX + 0.35, WATER_TOP_BASE + 0.75, 0.19);
+    rig.add(lcdBody);
+    const burnerX = canX;
+    const burnerGlassMat = new THREE.MeshPhysicalMaterial({
+        color: 0xcfe9ee, transparent: true, opacity: 0.22, roughness: 0.05, metalness: 0,
+        transmission: 0.6, thickness: 0.4, ior: 1.45, clearcoat: 1, clearcoatRoughness: 0.08,
+        side: THREE.DoubleSide, depthWrite: false
+    });
+    const burnerBody = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.6, 0.85, 28), burnerGlassMat);
+    burnerBody.renderOrder = 2;
+    burnerBody.position.set(burnerX, 0.62, 0);
+    rig.add(burnerBody);
+    const burnerCapMat = new THREE.MeshStandardMaterial({ color: 0xc9a94a, roughness: 0.4, metalness: 0.75 });
+    const burnerCap = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.55, 0.12, 28), burnerCapMat);
+    burnerCap.position.set(burnerX, 1.1, 0);
+    rig.add(burnerCap);
+    const wickTube = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.22, 12), burnerCapMat);
+    wickTube.position.set(burnerX, 1.27, 0);
+    rig.add(wickTube);
+    const wickMat = new THREE.MeshStandardMaterial({ color: 0x3a3025, roughness: 0.9 });
+    const wick = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, 0.22, 10), wickMat);
+    wick.position.set(burnerX, 1.44, 0);
+    rig.add(wick);
+    const wickInner = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.75, 10), wickMat);
+    wickInner.position.set(burnerX, 0.665, 0);
+    rig.add(wickInner);
+    const ETHANOL_BASE_Y = 0.23, ETHANOL_MAX_H = 0.66;
+    let ethanolFill = 0.72;
+    const ethanolMat = new THREE.MeshPhysicalMaterial({
+        color: 0xF7F2DA, transparent: true, opacity: 0.5, roughness: 0.05, transmission: 0.6,
+        side: THREE.DoubleSide, depthWrite: false
+    });
+    const ethanolLiquid = new THREE.Mesh(new THREE.CylinderGeometry(0.48, 0.52, 1, 24), ethanolMat);
+    rig.add(ethanolLiquid);
+    function updateEthanolLevel() {
+        const h = ETHANOL_MAX_H * Math.max(0, ethanolFill);
+        ethanolLiquid.scale.y = h;
+        ethanolLiquid.position.set(burnerX, ETHANOL_BASE_Y + h / 2, 0);
+    }
+    updateEthanolLevel();
+    function makeFlameTexture() {
+        const c = document.createElement('canvas');
+        c.width = 128;
+        c.height = 256;
+        const ctx = c.getContext('2d');
+        const g = ctx.createLinearGradient(0, 256, 0, 0);
+        g.addColorStop(0.00, 'rgba(255,255,255,1.0)');
+        g.addColorStop(0.12, 'rgba(255,247,200,0.98)');
+        g.addColorStop(0.32, 'rgba(255,200,60,0.92)');
+        g.addColorStop(0.58, 'rgba(255,120,20,0.72)');
+        g.addColorStop(0.82, 'rgba(255,70,10,0.32)');
+        g.addColorStop(1.00, 'rgba(255,60,10,0.0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.moveTo(64, 0);
+        ctx.bezierCurveTo(20, 90, 6, 150, 30, 210);
+        ctx.bezierCurveTo(45, 245, 83, 245, 98, 210);
+        ctx.bezierCurveTo(122, 150, 108, 90, 64, 0);
+        ctx.closePath();
+        ctx.fill();
+        const tex = new THREE.CanvasTexture(c);
+        tex.needsUpdate = true;
+        return tex;
+    }
+    function makeGlowTexture() {
+        const c = document.createElement('canvas');
+        c.width = c.height = 128;
+        const ctx = c.getContext('2d');
+        const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+        g.addColorStop(0, 'rgba(255,170,60,0.55)');
+        g.addColorStop(0.5, 'rgba(255,110,20,0.22)');
+        g.addColorStop(1, 'rgba(255,80,10,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 128, 128);
+        return new THREE.CanvasTexture(c);
+    }
+    const flameGroup = new THREE.Group();
+    flameGroup.position.set(burnerX, 1.56, 0);
+    flameGroup.visible = false;
+    rig.add(flameGroup);
+    const flameTex = makeFlameTexture();
+    const flameMat = new THREE.MeshBasicMaterial({
+        map: flameTex, transparent: true, side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending, depthWrite: false
+    });
+    const planeA = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.72), flameMat);
+    planeA.position.y = 0.36;
+    flameGroup.add(planeA);
+    const planeB = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.72), flameMat);
+    planeB.position.y = 0.36;
+    planeB.rotation.y = Math.PI / 2;
+    flameGroup.add(planeB);
+    const glowSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: makeGlowTexture(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    glowSprite.scale.set(1.6, 1.6, 1.6);
+    glowSprite.position.y = 0.32;
+    flameGroup.add(glowSprite);
+    const flameLight = new THREE.PointLight(0xFF9A3C, 0, 8);
+    flameLight.position.set(burnerX, 1.9, 0);
+    rig.add(flameLight);
+    const flameCoreLight = new THREE.PointLight(0xFFDD99, 0, 3);
+    flameCoreLight.position.set(burnerX, 1.65, 0);
+    rig.add(flameCoreLight);
+    resize();
+    const INITIAL_MASS = 150.00;
+    const BURN_RATE = 0.020;
+    const INITIAL_TEMP = 20.0;
+    const HEAT_RATE = 30 / 90;
+    let running = false, done = false, elapsed = 0, lastFrame = performance.now();
+    function fmtMass(m) { return m.toFixed(2) + ' g'; }
+    function fmtTemp(t) { return t.toFixed(1) + ' \u00b0C'; }
+    function updateReadouts() {
+        const mass = Math.max(0, INITIAL_MASS - BURN_RATE * elapsed);
+        const temp = INITIAL_TEMP + HEAT_RATE * elapsed;
+        document.getElementById('curMass').textContent = fmtMass(mass);
+        document.getElementById('curTemp').textContent = fmtTemp(temp);
+        lcdMat.map = makeLCDTexture(temp.toFixed(1) + 'C');
+        lcdMat.needsUpdate = true;
+        return { mass, temp };
+    }
+    function tick(now) {
+        requestAnimationFrame(tick);
+        const dt = Math.min(0.1, (now - lastFrame) / 1000);
+        lastFrame = now;
+        if (running) {
+            elapsed += dt;
+            const flick = 1 + Math.sin(now * 0.02) * 0.08 + (Math.random() - 0.5) * 0.06;
+            flameGroup.scale.set(flick, 1 + Math.sin(now * 0.017) * 0.14 + (Math.random() - 0.5) * 0.05, flick);
+            flameGroup.rotation.y = Math.sin(now * 0.004) * 0.3;
+            flameGroup.position.x = burnerX + Math.sin(now * 0.006) * 0.025;
+            flameGroup.position.z = Math.cos(now * 0.0053) * 0.025;
+            flameLight.intensity = 1.2 + Math.sin(now * 0.03) * 0.28 + (Math.random() - 0.5) * 0.18;
+            flameCoreLight.intensity = 0.9 + Math.sin(now * 0.041) * 0.3 + (Math.random() - 0.5) * 0.2;
+            const sootLevel = Math.min(0.28, 0.28 * (1 - Math.exp(-elapsed / 70)));
+            sootMat.opacity = sootLevel;
+            sootSideMat.opacity = sootLevel * 0.8;
+            ethanolFill = 0.72 - 0.0009 * elapsed;
+            updateEthanolLevel();
+            updateReadouts();
+        }
+        renderer.render(scene, camera);
+    }
+    window.startCombustion = function () {
+        if (running || done)
+            return;
+        running = true;
+        flameGroup.visible = true;
+        flameLight.intensity = 1.2;
+        flameCoreLight.intensity = 0.9;
+        document.getElementById('btnStart').disabled = true;
+        document.getElementById('btnStop').disabled = false;
+    };
+    let seeThrough = false;
+    window.toggleSeeThrough = function () {
+        seeThrough = !seeThrough;
+        canOuterMat.opacity = seeThrough ? 0.18 : 1;
+        const btn = document.getElementById('btnSeeThrough');
+        btn.textContent = seeThrough ? 'Hide Water Level (Restore Can)' : 'Show Water Level (See-Through Can)';
+    };
+    window.stopExperiment = function () {
+        if (!running)
+            return;
+        running = false;
+        done = true;
+        flameGroup.visible = false;
+        flameLight.intensity = 0;
+        flameCoreLight.intensity = 0;
+        const { mass, temp } = updateReadouts();
+        document.getElementById('resFinalTemp').textContent = fmtTemp(temp);
+        document.getElementById('resDeltaT').textContent = '+' + (temp - INITIAL_TEMP).toFixed(1) + ' \u00b0C';
+        document.getElementById('resFinalMass').textContent = fmtMass(mass);
+        document.getElementById('resDeltaM').textContent = (INITIAL_MASS - mass).toFixed(2) + ' g';
+        document.getElementById('resultsBox').classList.add('show');
+        document.getElementById('btnStop').disabled = true;
+    };
+    window.resetSimulation = function () {
+        running = false;
+        done = false;
+        elapsed = 0;
+        flameGroup.visible = false;
+        flameLight.intensity = 0;
+        flameCoreLight.intensity = 0;
+        sootMat.opacity = 0;
+        sootSideMat.opacity = 0;
+        ethanolFill = 0.72;
+        updateEthanolLevel();
+        seeThrough = false;
+        canOuterMat.opacity = 1;
+        document.getElementById('btnSeeThrough').textContent = 'Show Water Level (See-Through Can)';
+        updateReadouts();
+        document.getElementById('resultsBox').classList.remove('show');
+        document.getElementById('btnStart').disabled = false;
+        document.getElementById('btnStop').disabled = true;
+    };
+    document.getElementById('initMass').textContent = fmtMass(INITIAL_MASS);
+    document.getElementById('curMass').textContent = fmtMass(INITIAL_MASS);
+    document.getElementById('initTemp').textContent = fmtTemp(INITIAL_TEMP);
+    document.getElementById('curTemp').textContent = fmtTemp(INITIAL_TEMP);
+    requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

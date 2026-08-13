@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="robots" content="noindex, nofollow, noarchive">
+<script>
+(function(){
+  document.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+  document.addEventListener('keydown', function(e){
+    var k = e.key;
+    var blockedKey = (k === 'F12');
+    var blockedCombo = (e.ctrlKey || e.metaKey) && (
+      k === 'u' || k === 'U' ||
+      k === 's' || k === 'S' ||
+      (e.shiftKey && (k === 'i' || k === 'I' || k === 'j' || k === 'J' || k === 'c' || k === 'C'))
+    );
+    if (blockedKey || blockedCombo) e.preventDefault();
+  });
+})();
+</script>
+<meta charset="UTF-8">
+<title>Same Heat, Different Mass — Cup vs Bucket of Water</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #000;
+    height: 100%;
+    overflow: hidden;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    color: #eee;
+  }
+
+  #stage {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    background: #000;
+  }
+
+  #canvasHost { position: absolute; inset: 0; }
+  canvas { display: block; }
+
+  .title {
+    position: absolute;
+    top: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #fff;
+    font-size: 20px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    text-shadow: 0 0 8px #0ff, 0 0 18px #0ff;
+    text-align: center;
+    white-space: nowrap;
+    z-index: 5;
+    pointer-events: none;
+  }
+
+  .subtitle {
+    position: absolute;
+    top: 50px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 12.5px;
+    color: #999;
+    text-align: center;
+    z-index: 5;
+    pointer-events: none;
+    max-width: 640px;
+  }
+
+  #result {
+    position: absolute;
+    bottom: 96px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 640px;
+    text-align: center;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #eee;
+    background: rgba(255,180,0,0.06);
+    border: 1px solid #ffb400;
+    border-radius: 12px;
+    padding: 12px 20px;
+    box-shadow: 0 0 14px rgba(255,180,0,0.25);
+    opacity: 0;
+    transition: opacity 0.8s ease;
+    z-index: 5;
+  }
+  #result.show { opacity: 1; }
+  #result b { color: #ffb400; }
+
+  #controls {
+    position: absolute;
+    bottom: 26px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 20px;
+    z-index: 5;
+  }
+
+  button {
+    font-family: inherit;
+    font-size: 14px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 12px 24px;
+    border-radius: 10px;
+    background: #050505;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  #btnHeat {
+    color: #ff3b3b;
+    border: 2px solid #ff3b3b;
+    box-shadow: 0 0 10px rgba(255,59,59,0.5);
+  }
+  #btnHeat:hover:not(:disabled) { background: rgba(255,59,59,0.12); box-shadow: 0 0 20px #ff3b3b; }
+
+  #btnReset {
+    color: #999;
+    border: 2px solid #555;
+  }
+  #btnReset:hover { color: #fff; border-color: #fff; box-shadow: 0 0 12px #fff; }
+
+  button:disabled { opacity: 0.3; cursor: not-allowed; }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="canvasHost"></div>
+
+  <div class="title">Same Heat, Different Mass</div>
+  <div class="subtitle">A cup and a bucket of water, each supplied with exactly 100 kJ of heat. Which one heats up more?</div>
+
+  <div id="result"></div>
+
+  <div id="controls">
+    <button id="btnHeat">Supply Heat</button>
+    <button id="btnReset">Reset</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>"use strict";
+const host = document.getElementById('canvasHost');
+const btnHeat = document.getElementById('btnHeat');
+const btnReset = document.getElementById('btnReset');
+const resultEl = document.getElementById('result');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000);
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.set(0, 1.6, 11);
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+host.appendChild(renderer.domElement);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 5;
+controls.maxDistance = 20;
+controls.target.set(0, 0.2, 0);
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+scene.add(new THREE.AmbientLight(0x222233, 1.2));
+const rimCyan = new THREE.PointLight(0x00eaff, 1.4, 24);
+rimCyan.position.set(-7, 5, 7);
+scene.add(rimCyan);
+const rimMagenta = new THREE.PointLight(0xff2fd6, 1.1, 24);
+rimMagenta.position.set(7, 5, 7);
+scene.add(rimMagenta);
+const fillLight = new THREE.PointLight(0xffffff, 0.5, 24);
+fillLight.position.set(0, 7, 3);
+scene.add(fillLight);
+function makeScreenCanvas() { const c = document.createElement('canvas'); c.width = 300; c.height = 220; return c; }
+function drawScreen(canvas, label, massLabel, tempC) {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#050505';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = '#00eaff';
+    ctx.lineWidth = 6;
+    ctx.strokeRect(6, 6, canvas.width - 12, canvas.height - 12);
+    ctx.textAlign = 'center';
+    const hot = tempC > 55;
+    ctx.fillStyle = hot ? '#ff5050' : '#5ff2ff';
+    ctx.shadowColor = ctx.fillStyle;
+    ctx.shadowBlur = 18;
+    ctx.font = 'bold 52px Consolas, monospace';
+    ctx.fillText(tempC.toFixed(1) + '\u00B0C', canvas.width / 2, canvas.height / 2 + 18);
+    ctx.shadowBlur = 0;
+}
+function makeLabelSprite(text, color, scaleX, scaleY) {
+    const c = document.createElement('canvas');
+    c.width = 512;
+    c.height = 128;
+    const ctx = c.getContext('2d');
+    ctx.font = 'bold 46px Segoe UI';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 18;
+    ctx.fillText(text, c.width / 2, c.height / 2);
+    const tex = new THREE.CanvasTexture(c);
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(scaleX || 2.6, scaleY || 0.65, 1);
+    return sprite;
+}
+function colorForTemp(t) {
+    const stops = [
+        { t: 25, c: [0x5f, 0xf2, 0xff] },
+        { t: 40, c: [0x88, 0xcc, 0x88] },
+        { t: 55, c: [0xff, 0xb4, 0x00] },
+        { t: 70, c: [0xff, 0x3b, 0x3b] },
+        { t: 85, c: [0xff, 0xff, 0xff] }
+    ];
+    if (t <= stops[0].t)
+        return stops[0].c;
+    if (t >= stops[stops.length - 1].t)
+        return stops[stops.length - 1].c;
+    let lo = stops[0], hi = stops[stops.length - 1];
+    for (let i = 0; i < stops.length - 1; i++) {
+        if (t >= stops[i].t && t <= stops[i + 1].t) {
+            lo = stops[i];
+            hi = stops[i + 1];
+            break;
+        }
+    }
+    const frac = (t - lo.t) / (hi.t - lo.t);
+    return lo.c.map((v, i) => Math.round(v + (hi.c[i] - v) * frac));
+}
+function buildContainer(x, kind, qLabel, massLabel, topR, botR, height, probeDepth) {
+    const group = new THREE.Group();
+    group.position.set(x, 0, 0);
+    const wallMat = new THREE.MeshStandardMaterial({
+        color: 0xcfcfd4, metalness: 0.7, roughness: 0.3,
+        transparent: true, opacity: 0.35, side: THREE.DoubleSide
+    });
+    const wallGeo = new THREE.CylinderGeometry(topR, botR, height, 32, 1, true);
+    const wall = new THREE.Mesh(wallGeo, wallMat);
+    wall.position.y = height / 2;
+    group.add(wall);
+    const rimMat = new THREE.MeshStandardMaterial({ color: 0x00eaff, emissive: 0x00eaff, emissiveIntensity: 0.6, metalness: 0.5, roughness: 0.3 });
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(topR, 0.02, 12, 40), rimMat);
+    rim.rotation.x = Math.PI / 2;
+    rim.position.y = height;
+    group.add(rim);
+    const fillHeight = height * 0.8;
+    const fillTopR = topR * 0.94 * (fillHeight / height) + topR * 0.06;
+    const waterMat = new THREE.MeshStandardMaterial({
+        color: 0x5ff2ff, emissive: 0x001a22, metalness: 0.1, roughness: 0.15,
+        transparent: true, opacity: 0.85
+    });
+    const waterGeo = new THREE.CylinderGeometry(topR * 0.93, botR * 0.93, fillHeight, 32);
+    const water = new THREE.Mesh(waterGeo, waterMat);
+    water.position.y = fillHeight / 2 + (height - fillHeight) * 0;
+    group.add(water);
+    const probeMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 0.6, roughness: 0.3 });
+    const probeTopY = height + 0.5;
+    const probeTipY = fillHeight - probeDepth;
+    const probeGeo = new THREE.CylinderGeometry(0.03, 0.03, probeTopY - probeTipY, 12);
+    const probe = new THREE.Mesh(probeGeo, probeMat);
+    probe.position.set(topR * 0.35, (probeTopY + probeTipY) / 2, 0);
+    group.add(probe);
+    const tipMat = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.7, roughness: 0.2 });
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 12), tipMat);
+    tip.position.set(topR * 0.35, probeTipY, 0);
+    group.add(tip);
+    const screenCanvas = makeScreenCanvas();
+    drawScreen(screenCanvas, qLabel, massLabel, 25.0);
+    const screenTex = new THREE.CanvasTexture(screenCanvas);
+    const screenMat = new THREE.MeshBasicMaterial({ map: screenTex, transparent: true });
+    const screenW = topR * 1.7, screenH = screenW * (220 / 300);
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(screenW, screenH), screenMat);
+    screen.position.set(topR * 0.35 + screenW / 2 + 0.25, probeTopY + screenH * 0.1, 0);
+    group.add(screen);
+    const wireMat = new THREE.LineBasicMaterial({ color: 0x888888 });
+    const wireGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(topR * 0.35, probeTopY, 0),
+        new THREE.Vector3(topR * 0.35 + screenW / 2, probeTopY + screenH * 0.1, 0)
+    ]);
+    group.add(new THREE.Line(wireGeo, wireMat));
+    scene.add(group);
+    return {
+        group, waterMat, screenCanvas, screenTex, qLabel, massLabel,
+        temp: 25.0, particles: [], bubbles: [], fillHeight, topR, botR, height
+    };
+}
+const cup = buildContainer(-3.2, 'CUP', 'Q = 100 kJ', '\u2248 0.4 kg water', 0.55, 0.42, 1.1, 0.15);
+const bucket = buildContainer(3.4, 'BUCKET', 'Q = 100 kJ', '\u2248 10 kg water', 1.35, 1.05, 1.9, 0.3);
+function buildEmber(x) {
+    const geo = new THREE.SphereGeometry(0.2, 16, 16);
+    const mat = new THREE.MeshStandardMaterial({ color: 0xff3b3b, emissive: 0xff3b3b, emissiveIntensity: 1.4 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x, -1.6, 0);
+    scene.add(mesh);
+    const light = new THREE.PointLight(0xff3b3b, 1.2, 4);
+    light.position.copy(mesh.position);
+    scene.add(light);
+    const qSprite = makeLabelSprite('100kJ', '#ff3b3b', 1.4, 0.35);
+    qSprite.position.set(x, -2.05, 0);
+    scene.add(qSprite);
+    return mesh;
+}
+const emberCup = buildEmber(-3.2);
+const emberBucket = buildEmber(3.4);
+function spawnParticle(container, x, baseY) {
+    const geo = new THREE.SphereGeometry(0.055, 8, 8);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xff5050 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x + (Math.random() - 0.5) * 0.4, baseY, (Math.random() - 0.5) * 0.2);
+    scene.add(mesh);
+    container.particles.push({ mesh, vy: 0.04 + Math.random() * 0.015, targetY: 0.1 });
+}
+function updateParticles(container) {
+    for (let i = container.particles.length - 1; i >= 0; i--) {
+        const p = container.particles[i];
+        p.mesh.position.y += p.vy;
+        if (p.mesh.position.y > p.targetY) {
+            scene.remove(p.mesh);
+            container.particles.splice(i, 1);
+        }
+    }
+}
+function spawnBubble(container, x) {
+    const geo = new THREE.SphereGeometry(0.03 + Math.random() * 0.02, 8, 8);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x + (Math.random() - 0.5) * 0.5, 0.05, (Math.random() - 0.5) * 0.3);
+    scene.add(mesh);
+    container.bubbles.push({ mesh, vy: 0.025 + Math.random() * 0.01, top: container.fillHeight * 0.9 });
+}
+function updateBubbles(container) {
+    for (let i = container.bubbles.length - 1; i >= 0; i--) {
+        const b = container.bubbles[i];
+        b.mesh.position.y += b.vy;
+        if (b.mesh.position.y > b.top) {
+            scene.remove(b.mesh);
+            container.bubbles.splice(i, 1);
+        }
+    }
+}
+function applyTemp(container) {
+    const [r, g, b] = colorForTemp(container.temp);
+    container.waterMat.color.setRGB(r / 255, g / 255, b / 255);
+    const hotness = Math.max(0, Math.min(1, (container.temp - 25) / 60));
+    container.waterMat.emissive.setRGB(r / 255 * 0.35 * hotness, g / 255 * 0.12 * hotness, b / 255 * 0.08 * hotness);
+    drawScreen(container.screenCanvas, container.qLabel, container.massLabel, container.temp);
+    container.screenTex.needsUpdate = true;
+}
+const BASE_TEMP = 25.0;
+const FINAL_CUP = 84.7;
+const FINAL_BUCKET = 27.4;
+let heating = false;
+let heatStart = 0;
+const HEAT_DURATION = 4200;
+let spawnAcc = 0;
+let bubbleAcc = 0;
+function easeOutCubic(x) { return 1 - Math.pow(1 - x, 3); }
+function startHeating() {
+    if (heating)
+        return;
+    heating = true;
+    heatStart = performance.now();
+    btnHeat.disabled = true;
+    resultEl.classList.remove('show');
+}
+function resetAll() {
+    heating = false;
+    btnHeat.disabled = false;
+    resultEl.classList.remove('show');
+    cup.temp = BASE_TEMP;
+    bucket.temp = BASE_TEMP;
+    applyTemp(cup);
+    applyTemp(bucket);
+    [cup, bucket].forEach(c => {
+        c.particles.forEach(p => scene.remove(p.mesh));
+        c.particles = [];
+        c.bubbles.forEach(bb => scene.remove(bb.mesh));
+        c.bubbles = [];
+    });
+}
+btnHeat.addEventListener('click', startHeating);
+btnReset.addEventListener('click', resetAll);
+function animate(now) {
+    requestAnimationFrame(animate);
+    controls.update();
+    if (heating) {
+        const elapsed = now - heatStart;
+        const p = Math.min(1, elapsed / HEAT_DURATION);
+        const eased = easeOutCubic(p);
+        cup.temp = BASE_TEMP + (FINAL_CUP - BASE_TEMP) * eased;
+        bucket.temp = BASE_TEMP + (FINAL_BUCKET - BASE_TEMP) * eased;
+        applyTemp(cup);
+        applyTemp(bucket);
+        spawnAcc += 16.6;
+        if (spawnAcc > 90) {
+            spawnParticle(cup, -3.2, -1.4);
+            spawnParticle(bucket, 3.4, -1.4);
+            spawnAcc = 0;
+        }
+        if (cup.temp > 65) {
+            bubbleAcc += 16.6;
+            if (bubbleAcc > 120) {
+                spawnBubble(cup, -3.2);
+                bubbleAcc = 0;
+            }
+        }
+        if (p >= 1) {
+            heating = false;
+            spawnAcc = 0;
+            resultEl.innerHTML = 'Both containers received the exact <b>same 100 kJ</b> of heat energy, but the cup has far <b>less water mass</b> than the bucket. Since &#916;T = Q / (m&middot;c), the same Q spread across a smaller mass means a much bigger temperature rise: the cup shot up to <b>84.7&deg;C</b>, while the bucket barely warmed to <b>27.4&deg;C</b>.';
+            resultEl.classList.add('show');
+        }
+    }
+    updateParticles(cup);
+    updateParticles(bucket);
+    updateBubbles(cup);
+    emberCup.rotation.y += 0.01;
+    emberBucket.rotation.y += 0.01;
+    renderer.render(scene, camera);
+}
+applyTemp(cup);
+applyTemp(bucket);
+requestAnimationFrame(animate);
+</script>
+
+</body>
+</html>
