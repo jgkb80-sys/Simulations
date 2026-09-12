@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Heating Curve & Particle Motion Simulation</title>
+<style>
+:root{--bg:#08131f;--panel:#0e2230;--cyan:#36d5e6;--white:#f5f7fa;--grey:#aebbc7;--orange:#ff8a3d}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 20% 10%,#0d2232,#08131f 55%);font-family:Arial,Helvetica,sans-serif;color:var(--white);overflow:hidden}
+.app{width:100vw;height:100vh;display:grid;grid-template-rows:auto 1fr auto;gap:10px;padding:14px}.header{display:flex;align-items:flex-end;justify-content:space-between;padding:0 4px}.title h1{margin:0;font-size:clamp(24px,3vw,42px)}.title h1 span{color:var(--cyan)}.title p{margin:5px 0 0;color:var(--grey);font-size:clamp(13px,1.2vw,18px)}.badge{border:1px solid var(--cyan);color:var(--cyan);padding:7px 12px;border-radius:999px;font-weight:700;font-size:14px}.main{display:grid;grid-template-columns:1.35fr .95fr;gap:12px;min-height:0}.card{background:linear-gradient(180deg,rgba(16,43,59,.96),rgba(10,28,40,.96));border:1.5px solid rgba(54,213,230,.75);border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.25);min-height:0}.chartWrap{position:relative;padding:18px}.particleWrap{display:grid;grid-template-rows:auto 1fr auto;padding:16px;gap:10px}.sectionTitle{font-size:18px;font-weight:700;color:var(--cyan)}#chart,#particles{width:100%;height:100%;display:block}.particleBox{position:relative;border:1px solid rgba(255,255,255,.15);border-radius:14px;background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.015));overflow:hidden}.stateTag{position:absolute;top:12px;left:12px;background:rgba(8,19,31,.78);border:1px solid rgba(54,213,230,.55);border-radius:12px;padding:8px 11px;font-weight:700;color:var(--cyan)}.info{display:grid;grid-template-columns:1fr 1fr;gap:10px}.infoBox{background:rgba(255,255,255,.035);border-radius:12px;padding:10px 12px;min-height:72px}.infoBox .k{color:var(--grey);font-size:12px;text-transform:uppercase;letter-spacing:.7px}.infoBox .v{font-weight:700;font-size:16px;margin-top:3px}.controls{display:grid;grid-template-columns:auto auto auto 1fr auto;gap:10px;align-items:center;background:rgba(8,19,31,.55);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:10px 12px}button{background:#113345;color:var(--white);border:1px solid rgba(54,213,230,.55);border-radius:10px;padding:9px 14px;font-weight:700;cursor:pointer}button:hover{background:#17465e}input[type=range]{width:100%}.stageRead{font-weight:700;color:var(--cyan);min-width:220px;text-align:right}.legend{position:absolute;right:24px;top:22px;background:rgba(8,19,31,.78);padding:8px 10px;border-radius:10px;font-size:12px;color:var(--grey);line-height:1.5}.legend b{color:var(--white)}@media(max-width:900px){body{overflow:auto}.app{height:auto;min-height:100vh}.main{grid-template-columns:1fr;grid-template-rows:55vh 55vh}.stageRead{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+<div class="header"><div class="title"><h1>Heating Curve <span>+ Particle-Level Motion</span></h1><p>Watch temperature change, particle motion, and phase changes together.</p></div><div class="badge">Structure 1.1 • States of Matter</div></div>
+<div class="main">
+<div class="card chartWrap"><div class="sectionTitle">Heating curve</div><canvas id="chart"></canvas><div class="legend"><b>Sloped sections:</b> average kinetic energy increases<br><b>Plateaus:</b> energy overcomes intermolecular attractions</div></div>
+<div class="card particleWrap"><div class="sectionTitle">Particle model</div><div class="particleBox"><canvas id="particles"></canvas><div class="stateTag" id="stateTag">Solid</div></div><div class="info"><div class="infoBox"><div class="k">Temperature</div><div class="v" id="tempRead">−20 °C</div></div><div class="infoBox"><div class="k">Particle behaviour</div><div class="v" id="motionRead">Vibrating about fixed positions</div></div><div class="infoBox"><div class="k">Energy change</div><div class="v" id="energyRead">Average kinetic energy increasing</div></div><div class="infoBox"><div class="k">What is happening?</div><div class="v" id="phaseRead">Solid warming</div></div></div></div>
+</div>
+<div class="controls"><button id="playBtn">▶ Play</button><button id="pauseBtn">⏸ Pause</button><button id="resetBtn">↺ Reset</button><input id="scrubber" type="range" min="0" max="1000" value="0"/><div class="stageRead" id="stageRead">A → B: solid warming</div></div>
+</div>
+<script>
+const chart=document.getElementById('chart'),ctx=chart.getContext('2d'),pc=document.getElementById('particles'),pctx=pc.getContext('2d'),dpr=Math.max(1,window.devicePixelRatio||1);
+function fit(c){const r=c.getBoundingClientRect();c.width=Math.max(1,Math.floor(r.width*dpr));c.height=Math.max(1,Math.floor(r.height*dpr));c.getContext('2d').setTransform(dpr,0,0,dpr,0,0)}
+const stages=[
+{a:0,b:.18,name:'A → B: solid warming',state:'Solid',t0:-20,t1:0,phase:'Solid warming',motion:'Vibrating faster about fixed positions',energy:'Average kinetic energy increasing'},
+{a:.18,b:.38,name:'B → C: melting',state:'Solid + liquid',t0:0,t1:0,phase:'Melting',motion:'Particles leave fixed positions and begin to slide',energy:'Potential energy increasing; temperature constant'},
+{a:.38,b:.62,name:'C → D: liquid warming',state:'Liquid',t0:0,t1:100,phase:'Liquid warming',motion:'Particles move past one another faster',energy:'Average kinetic energy increasing'},
+{a:.62,b:.82,name:'D → E: boiling',state:'Liquid + gas',t0:100,t1:100,phase:'Boiling / vaporization',motion:'Particles separate widely as gas forms',energy:'Potential energy increasing; temperature constant'},
+{a:.82,b:1,name:'E → F: gas warming',state:'Gas',t0:100,t1:140,phase:'Gas warming',motion:'Rapid random motion; particles far apart',energy:'Average kinetic energy increasing'}];
+let progress=0,playing=false,last=0,particles=[];
+function stageAt(p){return stages.find(s=>p>=s.a&&p<=s.b)||stages.at(-1)}function sf(s,p){return Math.max(0,Math.min(1,(p-s.a)/(s.b-s.a)))}function tempAt(p){const s=stageAt(p),f=sf(s,p);return s.t0+(s.t1-s.t0)*f}
+function curvePoint(p,w,h){const m={l:72,r:34,t:48,b:55},W=w-m.l-m.r,H=h-m.t-m.b,x=m.l+p*W,t=tempAt(p),y=m.t+(150-t)/180*H;return{x,y,m,W,H}}
+function drawChart(){const w=chart.clientWidth,h=chart.clientHeight;ctx.clearRect(0,0,w,h);const q0=curvePoint(0,w,h),m=q0.m,W=q0.W,H=q0.H;ctx.strokeStyle='rgba(255,255,255,.08)';ctx.lineWidth=1;for(let i=0;i<=6;i++){const y=m.t+i*H/6;ctx.beginPath();ctx.moveTo(m.l,y);ctx.lineTo(m.l+W,y);ctx.stroke()}ctx.strokeStyle='rgba(255,255,255,.85)';ctx.lineWidth=1.8;ctx.beginPath();ctx.moveTo(m.l,m.t);ctx.lineTo(m.l,m.t+H);ctx.lineTo(m.l+W,m.t+H);ctx.stroke();ctx.fillStyle='rgba(255,255,255,.88)';ctx.font='14px Arial';ctx.save();ctx.translate(20,m.t+H/2);ctx.rotate(-Math.PI/2);ctx.fillText('Temperature',0,0);ctx.restore();ctx.fillText('Time',m.l+W/2,m.t+H+38);for(const [val,label] of [[0,'m.p.'],[100,'b.p.']]){const y=m.t+(150-val)/180*H;ctx.setLineDash([6,6]);ctx.strokeStyle='rgba(255,255,255,.4)';ctx.beginPath();ctx.moveTo(m.l,y);ctx.lineTo(m.l+W,y);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(255,255,255,.7)';ctx.fillText(label,m.l+8,y-8)}ctx.strokeStyle='#d7f9ff';ctx.lineWidth=4;ctx.beginPath();for(let i=0;i<=300;i++){const p=i/300,q=curvePoint(p,w,h);i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y)}ctx.stroke();ctx.font='bold 18px Arial';ctx.fillStyle='#f5f7fa';[['A',.02],['B',.18],['C',.38],['D',.62],['E',.82],['F',.98]].forEach(([lab,p])=>{const q=curvePoint(p,w,h);ctx.fillText(lab,q.x+6,q.y-10)});ctx.strokeStyle='#36d5e6';ctx.lineWidth=5;ctx.beginPath();const n=Math.max(1,Math.floor(progress*300));for(let i=0;i<=n;i++){const p=i/300,q=curvePoint(p,w,h);i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y)}ctx.stroke();const q=curvePoint(progress,w,h);ctx.beginPath();ctx.fillStyle='#ff8a3d';ctx.arc(q.x,q.y,8,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.strokeStyle='rgba(255,138,61,.28)';ctx.lineWidth=8;ctx.arc(q.x,q.y,13,0,Math.PI*2);ctx.stroke()}
+
+function initParticles(){
+  particles=[];
+  const w=pc.clientWidth,h=pc.clientHeight;
+
+  // Build a compact, highly ordered 3D-style cubic lattice.
+  // 4 x 4 x 4 = 64 particles.
+  const nx=4, ny=4, nz=4;
+  const sx=Math.min(42,(w-170)/(nx-1));
+  const sy=Math.min(34,(h-170)/(ny-1));
+  const depthX=13, depthY=-10;
+  const baseX=w/2-(nx-1)*sx/2-(nz-1)*depthX/2;
+  const baseY=h/2-(ny-1)*sy/2+28-(nz-1)*depthY/2;
+
+  let idx=0;
+  for(let z=0;z<nz;z++){
+    for(let y=0;y<ny;y++){
+      for(let x=0;x<nx;x++){
+        const bx=baseX+x*sx+z*depthX;
+        const by=baseY+y*sy+z*depthY;
+        particles.push({
+          bx,by,x:bx,y:by,
+          vx:(Math.random()-.5)*0.5,
+          vy:(Math.random()-.5)*0.5,
+          phase:Math.random()*Math.PI*2,
+          ix:x,iy:y,iz:z,index:idx++,
+          // lower/front particles melt first for a visually believable collapse
+          meltOrder:(ny-1-y)*0.7 + z*0.22 + x*0.06 + Math.random()*0.12,
+          boilOrder:Math.random()
+        });
+      }
+    }
+  }
+  particles.sort((a,b)=>a.meltOrder-b.meltOrder);
+}
+
+function particle(x,y,r=9,kind='solid'){
+  const palette = {
+    solid:['rgba(226,252,255,1)','rgba(57,216,232,1)','rgba(17,95,122,1)'],
+    liquid:['rgba(229,251,255,1)','rgba(70,196,235,1)','rgba(21,83,133,1)'],
+    gas:['rgba(246,230,255,1)','rgba(180,119,255,1)','rgba(84,43,130,1)']
+  }[kind];
+  const g=pctx.createRadialGradient(x-r*.35,y-r*.35,1,x,y,r);
+  g.addColorStop(0,palette[0]); g.addColorStop(.48,palette[1]); g.addColorStop(1,palette[2]);
+  pctx.fillStyle=g;
+  pctx.beginPath(); pctx.arc(x,y,r,0,Math.PI*2); pctx.fill();
+  pctx.strokeStyle='rgba(255,255,255,.38)'; pctx.lineWidth=1; pctx.stroke();
+}
+
+function freeMove(p,dt,speed,xmin,xmax,ymin,ymax){
+  p.vx+=(Math.random()-.5)*.085;
+  p.vy+=(Math.random()-.5)*.085;
+  const m=Math.hypot(p.vx,p.vy)||1;
+  p.vx=p.vx/m*speed; p.vy=p.vy/m*speed;
+  p.x+=p.vx*dt*.085; p.y+=p.vy*dt*.085;
+  if(p.x<xmin){p.x=xmin;p.vx=Math.abs(p.vx)}
+  if(p.x>xmax){p.x=xmax;p.vx=-Math.abs(p.vx)}
+  if(p.y<ymin){p.y=ymin;p.vy=Math.abs(p.vy)}
+  if(p.y>ymax){p.y=ymax;p.vy=-Math.abs(p.vy)}
+}
+
+function drawLatticeLinks(activeSet){
+  // Connect nearest neighbours in the remaining solid lattice.
+  pctx.strokeStyle='rgba(78,221,236,.18)';
+  pctx.lineWidth=1.2;
+  const byCoord=new Map();
+  activeSet.forEach(p=>byCoord.set(`${p.ix},${p.iy},${p.iz}`,p));
+  activeSet.forEach(p=>{
+    [[1,0,0],[0,1,0],[0,0,1]].forEach(([dx,dy,dz])=>{
+      const q=byCoord.get(`${p.ix+dx},${p.iy+dy},${p.iz+dz}`);
+      if(q){
+        pctx.beginPath(); pctx.moveTo(p.x,p.y); pctx.lineTo(q.x,q.y); pctx.stroke();
+      }
+    });
+  });
+}
+
+function updateParticles(dt){
+  const w=pc.clientWidth,h=pc.clientHeight,s=stageAt(progress),f=sf(s,progress),now=performance.now();
+  const r=11;
+
+  if(s.state==='Solid'){
+    const amp=1.5+4.2*f;
+    particles.forEach(p=>{
+      p.x=p.bx+Math.sin(now/(120-35*f)+p.phase)*amp;
+      p.y=p.by+Math.cos(now/(132-35*f)+p.phase)*amp;
+    });
+    return;
+  }
+
+  if(s.state==='Solid + liquid'){
+    // Cube progressively collapses: intact lattice shrinks while liquid pool grows.
+    const meltCount=Math.round(f*particles.length);
+    particles.forEach((p,i)=>{
+      if(i<meltCount){
+        // first time a particle melts, nudge it downward toward the liquid pool
+        if(Math.abs(p.x-p.bx)<18 && Math.abs(p.y-p.by)<18){
+          p.vx=(Math.random()-.5)*0.8;
+          p.vy=0.7+Math.random()*0.7;
+        }
+        freeMove(p,dt,.52+f*.35,r,w-r,h*.58,h-r-16);
+      }else{
+        const amp=4.5;
+        p.x=p.bx+Math.sin(now/85+p.phase)*amp;
+        p.y=p.by+Math.cos(now/95+p.phase)*amp;
+      }
+    });
+    return;
+  }
+
+  if(s.state==='Liquid'){
+    particles.forEach(p=>freeMove(p,dt,.68+1.05*f,r,w-r,h*.56,h-r-16));
+    return;
+  }
+
+  if(s.state==='Liquid + gas'){
+    // Liquid remains pooled at the bottom; an increasing fraction becomes vapor.
+    const gasCount=Math.round(f*particles.length);
+    particles.forEach((p,i)=>{
+      if(i<gasCount){
+        if(p.y>h*.55 && Math.random()<0.06){
+          p.vy=-1.3-Math.random()*0.8;
+        }
+        freeMove(p,dt,1.35+f*.65,r,w-r,r,h-r-10);
+      }else{
+        freeMove(p,dt,.86,r,w-r,h*.58,h-r-16);
+      }
+    });
+    return;
+  }
+
+  particles.forEach(p=>freeMove(p,dt,1.65+1.2*f,r,w-r,r,h-r-10));
+}
+
+function drawParticles(){
+  const w=pc.clientWidth,h=pc.clientHeight,s=stageAt(progress),f=sf(s,progress);
+  pctx.clearRect(0,0,w,h);
+
+  const bg=pctx.createLinearGradient(0,0,0,h);
+  bg.addColorStop(0,'rgba(27,73,96,.025)');
+  bg.addColorStop(1,'rgba(54,213,230,.11)');
+  pctx.fillStyle=bg; pctx.fillRect(0,0,w,h);
+
+  // subtle base line so liquid pooling is visually clear
+  pctx.strokeStyle='rgba(255,255,255,.07)';
+  pctx.beginPath(); pctx.moveTo(12,h*.56); pctx.lineTo(w-12,h*.56); pctx.stroke();
+
+  if(s.state==='Solid'){
+    drawLatticeLinks(particles);
+    particles.slice().sort((a,b)=>a.iz-b.iz||a.iy-b.iy).forEach(p=>particle(p.x,p.y,9,'solid'));
+  }
+  else if(s.state==='Solid + liquid'){
+    const meltCount=Math.round(f*particles.length);
+    const liquid=particles.slice(0,meltCount);
+    const solid=particles.slice(meltCount);
+    drawLatticeLinks(solid);
+    solid.slice().sort((a,b)=>a.iz-b.iz||a.iy-b.iy).forEach(p=>particle(p.x,p.y,9,'solid'));
+    liquid.forEach(p=>particle(p.x,p.y,9,'liquid'));
+
+    pctx.fillStyle='rgba(70,196,235,.08)';
+    pctx.fillRect(0,h*.56,w,h*.44);
+  }
+  else if(s.state==='Liquid'){
+    pctx.fillStyle='rgba(70,196,235,.08)';
+    pctx.fillRect(0,h*.56,w,h*.44);
+    particles.forEach(p=>particle(p.x,p.y,9,'liquid'));
+  }
+  else if(s.state==='Liquid + gas'){
+    const gasCount=Math.round(f*particles.length);
+    pctx.fillStyle='rgba(70,196,235,.08)';
+    pctx.fillRect(0,h*.56,w,h*.44);
+    particles.forEach((p,i)=>particle(p.x,p.y,9,i<gasCount?'gas':'liquid'));
+
+    // faint upward vapor arrows
+    pctx.strokeStyle='rgba(180,119,255,.22)';
+    pctx.lineWidth=1.4;
+    for(let x=55;x<w-30;x+=85){
+      pctx.beginPath(); pctx.moveTo(x,h*.54); pctx.lineTo(x,h*.34); pctx.stroke();
+      pctx.beginPath(); pctx.moveTo(x-4,h*.39); pctx.lineTo(x,h*.34); pctx.lineTo(x+4,h*.39); pctx.stroke();
+    }
+  }
+  else{
+    particles.forEach(p=>particle(p.x,p.y,9,'gas'));
+  }
+
+  if(s.phase==='Melting'){
+    pctx.fillStyle='rgba(255,138,61,.92)';
+    pctx.font='bold 13px Arial';
+    pctx.fillText('Melting: the ordered lattice progressively collapses into a liquid',18,h-18);
+  }
+  if(s.phase==='Boiling / vaporization'){
+    pctx.fillStyle='rgba(255,138,61,.92)';
+    pctx.font='bold 13px Arial';
+    pctx.fillText('Boiling: liquid and vapor coexist as more particles enter the gas phase',18,h-18);
+  }
+}
+function updateInfo(){const s=stageAt(progress);document.getElementById('tempRead').textContent=(Math.round(tempAt(progress)*10)/10)+' °C';document.getElementById('motionRead').textContent=s.motion;document.getElementById('energyRead').textContent=s.energy;document.getElementById('phaseRead').textContent=s.phase;document.getElementById('stateTag').textContent=s.state;document.getElementById('stageRead').textContent=s.name;document.getElementById('scrubber').value=Math.round(progress*1000)}function draw(){drawChart();drawParticles();updateInfo()}
+function animate(ts){if(!last)last=ts;const dt=Math.min(32,ts-last);last=ts;if(playing){progress+=dt/26000;if(progress>=1){progress=1;playing=false}}updateParticles(dt);draw();requestAnimationFrame(animate)}document.getElementById('playBtn').onclick=()=>playing=true;document.getElementById('pauseBtn').onclick=()=>playing=false;document.getElementById('resetBtn').onclick=()=>{playing=false;progress=0;initParticles();draw()};document.getElementById('scrubber').addEventListener('input',e=>{playing=false;progress=Number(e.target.value)/1000;initParticles();draw()});function resize(){fit(chart);fit(pc);initParticles();draw()}window.addEventListener('resize',resize);resize();requestAnimationFrame(animate);
+</script>
+</body></html>
