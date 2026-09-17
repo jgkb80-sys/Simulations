@@ -1,0 +1,165 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Born–Haber Cycle Builder</title>
+<style>
+body{font-family:Arial,sans-serif;margin:0;color:#102a52;background:#fff}header{padding:18px 24px;background:linear-gradient(100deg,#1d5798,#5c9ed0,#eef8ff);color:#fff}h1{margin:0;font-size:42px}header p{margin:5px 0}.wrap{max-width:1450px;margin:auto;padding:14px}.controls{display:flex;gap:10px;flex-wrap:wrap}.card{border:1px solid #bfd4ea;border-radius:14px;background:#f7fbff;padding:13px}.controls .card{flex:1;min-width:210px}select,input,button{font:inherit}select,input{width:100%;padding:10px;margin-top:6px;border:1px solid #9fb9d5;border-radius:9px;background:#fff}button{border:1px solid #8fb2d8;border-radius:10px;padding:11px;background:#fff;color:#102a52;cursor:pointer}.primary{background:#1e5fa8;color:#fff;font-weight:bold}.main{display:grid;grid-template-columns:minmax(0,1fr) 350px;gap:12px;margin-top:12px;align-items:start}.diagram{padding:0;overflow:hidden}.dt{background:#1e5fa8;color:white;text-align:center;padding:10px;font-size:24px;font-weight:bold}.svgwrap{overflow-x:auto;background:#fff}svg{width:100%;min-width:760px;display:block}.side .card{margin-bottom:10px}.processes{margin-top:0;position:sticky;top:10px;max-height:calc(100vh - 20px);overflow:auto}.infoBelow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-top:12px}.infoBelow .card{min-width:0}.progress{height:10px;background:#d7e0ea;border-radius:10px;overflow:hidden}.progress div{height:100%;background:#1e5fa8;width:0}.grid{display:grid;grid-template-columns:1fr;gap:9px}.proc{min-height:105px;text-align:center}.proc .sym{font-size:19px;margin:8px}.proc.used{opacity:.4}.proc.bad{border-color:#e11d2e;animation:s .25s}.proc.good{border:2px solid #16864a}.small{font-size:13px;color:#526b87}.feedback{min-height:42px;font-size:14px}@keyframes s{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}@media(max-width:1000px){.main{grid-template-columns:1fr}.processes{position:static;max-height:none}.grid{grid-template-columns:1fr 1fr}.infoBelow{grid-template-columns:1fr 1fr}}@media(max-width:500px){.grid,.infoBelow{grid-template-columns:1fr}h1{font-size:30px}}
+</style></head><body>
+<header><h1>Born–Haber Cycle Builder</h1><p>Build the enthalpy-level diagram by selecting thermochemical processes.</p></header>
+<div class="wrap"><div class="controls">
+<label class="card"><b>Choose a compound</b><select id="compound"><option>NaCl</option><option>MgCl2</option><option>Na2O</option><option>MgO</option><option>NaBr</option><option>MgI2</option></select></label>
+<label class="card"><b>Find the unknown</b><select id="target"><option value="lattice">Lattice enthalpy</option><option value="formation">Enthalpy of formation</option><option value="random">Challenge me</option><option value="phase">Phase-change extension (Br/I)</option></select></label>
+<div class="card"><button id="values">Show ΔH values</button> <button id="reset">↻ Reset cycle</button></div></div>
+<div class="main">
+<section class="card diagram"><div class="dt" id="title"></div><div class="svgwrap"><svg id="svg" viewBox="0 0 950 610"></svg></div></section>
+<section class="card processes"><h2>Thermochemical processes</h2><p class="small">Select the process you think comes next. Buttons remain visible while you construct the cycle.</p><div id="buttons" class="grid"></div></section>
+</div>
+<section class="infoBelow">
+<div class="card"><b>Instructions</b><p class="small">Choose the process that should be added next. Each correct choice adds a complete energy level and an arrow that begins and ends on the corresponding levels.</p></div>
+<div class="card"><b>Arrow key</b><p>↑ Endothermic — heat absorbed</p><p>↓ Exothermic — heat released</p></div>
+<div class="card"><b>Cycle progress</b><div class="progress" style="margin:10px 0"><div id="bar"></div></div><span id="count"></span></div>
+<div class="card"><b>Current step</b><div id="msg" class="feedback">Choose a process below.</div></div>
+<div class="card"><b>Hess's law challenge</b><p id="question" class="small"></p>
+<div id="answer1label" class="small" style="margin:6px 0 3px"></div><input id="answer" type="number" placeholder="kJ mol⁻¹">
+<div id="phaseAnswerWrap" style="display:none"><div id="answer2label" class="small" style="margin:8px 0 3px"></div><input id="answer2" type="number" placeholder="kJ mol⁻¹"></div>
+<button id="check" class="primary" style="width:100%;margin-top:8px">Check answer</button><div id="result" class="feedback"></div></div>
+</section></div>
+<script>
+const D={
+NaCl:{f:"NaCl",hf:-411,b:"Na(s) + ½Cl₂(g)",solid:"NaCl(s)",s:[["Atomization of sodium","ΔH°at(Na)","Na(g) + ½Cl₂(g)",108],["Atomization of chlorine","ΔH°at(Cl)","Na(g) + Cl(g)",121],["1st ionization energy of sodium","ΔH°IE₁(Na)","Na⁺(g) + Cl(g) + e⁻",496],["Electron affinity of chlorine","ΔH°EA(Cl)","Na⁺(g) + Cl⁻(g)",-349],["Lattice enthalpy","ΔH°LE(NaCl)","NaCl(s)",-787]]},
+MgCl2:{f:"MgCl₂",hf:-642,b:"Mg(s) + Cl₂(g)",solid:"MgCl₂(s)",s:[["Atomization of magnesium","ΔH°at(Mg)","Mg(g) + Cl₂(g)",148],["Atomization of chlorine ×2","2ΔH°at(Cl)","Mg(g) + 2Cl(g)",242],["1st ionization energy of magnesium","ΔH°IE₁(Mg)","Mg⁺(g) + 2Cl(g) + e⁻",738],["2nd ionization energy of magnesium","ΔH°IE₂(Mg)","Mg²⁺(g) + 2Cl(g) + 2e⁻",1451],["Electron affinity of chlorine ×2","2ΔH°EA(Cl)","Mg²⁺(g) + 2Cl⁻(g)",-698],["Lattice enthalpy","ΔH°LE(MgCl₂)","MgCl₂(s)",-2523]]},
+Na2O:{f:"Na₂O",hf:-414,b:"2Na(s) + ½O₂(g)",solid:"Na₂O(s)",s:[["Atomization of sodium ×2","2ΔH°at(Na)","2Na(g) + ½O₂(g)",216],["Atomization of oxygen","ΔH°at(O)","2Na(g) + O(g)",249],["Ionization energy of sodium ×2","2ΔH°IE₁(Na)","2Na⁺(g) + O(g) + 2e⁻",992],["1st electron affinity of oxygen","ΔH°EA₁(O)","2Na⁺(g) + O⁻(g) + e⁻",-141],["2nd electron affinity of oxygen","ΔH°EA₂(O)","2Na⁺(g) + O²⁻(g)",844],["Lattice enthalpy","ΔH°LE(Na₂O)","Na₂O(s)",-2574]]},
+MgO:{f:"MgO",hf:-602,b:"Mg(s) + ½O₂(g)",solid:"MgO(s)",s:[["Atomization of magnesium","ΔH°at(Mg)","Mg(g) + ½O₂(g)",148],["Atomization of oxygen","ΔH°at(O)","Mg(g) + O(g)",249],["1st ionization energy of magnesium","ΔH°IE₁(Mg)","Mg⁺(g) + O(g) + e⁻",738],["2nd ionization energy of magnesium","ΔH°IE₂(Mg)","Mg²⁺(g) + O(g) + 2e⁻",1451],["1st electron affinity of oxygen","ΔH°EA₁(O)","Mg²⁺(g) + O⁻(g) + e⁻",-141],["2nd electron affinity of oxygen","ΔH°EA₂(O)","Mg²⁺(g) + O²⁻(g)",844],["Lattice enthalpy","ΔH°LE(MgO)","MgO(s)",-3891]]},
+NaBr:{f:"NaBr",hf:-361,b:"Na(s) + ½Br₂(l)",solid:"NaBr(s)",s:[["Atomization of sodium","ΔH°at(Na)","Na(g) + ½Br₂(l)",108],["Atomization of bromine","ΔH°at(Br)","Na(g) + Br(g)",108],["1st ionization energy of sodium","ΔH°IE₁(Na)","Na⁺(g) + Br(g) + e⁻",496],["Electron affinity of bromine","ΔH°EA(Br)","Na⁺(g) + Br⁻(g)",-325],["Lattice enthalpy","ΔH°LE(NaBr)","NaBr(s)",-752]]},
+MgI2:{f:"MgI₂",hf:-364,b:"Mg(s) + I₂(s)",solid:"MgI₂(s)",s:[["Atomization of magnesium","ΔH°at(Mg)","Mg(g) + I₂(s)",148],["Atomization of iodine ×2","2ΔH°at(I)","Mg(g) + 2I(g)",214],["1st ionization energy of magnesium","ΔH°IE₁(Mg)","Mg⁺(g) + 2I(g) + e⁻",738],["2nd ionization energy of magnesium","ΔH°IE₂(Mg)","Mg²⁺(g) + 2I(g) + 2e⁻",1451],["Electron affinity of iodine ×2","2ΔH°EA(I)","Mg²⁺(g) + 2I⁻(g)",-590],["Lattice enthalpy","ΔH°LE(MgI₂)","MgI₂(s)",-2325]]}};
+const E=id=>document.getElementById(id);let n=0,form=false,show=false,mode="lattice";const X=()=>D[E("compound").value];
+function buttons(){let x=X(),a=[{f:1,n:"Enthalpy of formation",sy:"ΔH°f",eq:x.b+" → "+x.solid},...x.s.map((s,i)=>({i,n:s[0],sy:s[1],eq:s[2]}))];a.sort(()=>Math.random()-.5);E("buttons").innerHTML="";a.forEach(o=>{let b=document.createElement("button");b.className="proc";b.innerHTML="<strong>"+o.n+"</strong><div class=sym>"+o.sy+"</div><div class=small>"+o.eq+"</div>";b.onclick=()=>choose(b,o);E("buttons").appendChild(b)})}
+function choose(b,o){if(b.classList.contains("used"))return;if(o.f){form=true;b.classList.add("used","good");E("msg").textContent="Enthalpy of formation added.";draw();return}if(o.i!==n){b.classList.remove("bad");void b.offsetWidth;b.classList.add("bad");E("msg").textContent="That process does not connect the current species to the next required level. Try again.";return}b.classList.add("used","good");let s=X().s[n++];E("msg").innerHTML="<b>"+s[0]+"</b><br>"+s[2]+"<br>"+(s[3]>0?"↑ Endothermic — heat absorbed":"↓ Exothermic — heat released");draw()}
+function draw(){
+ const x=X(),svg=E("svg"); E("title").textContent=x.f+" Born–Haber Cycle";
+ E("count").textContent=n+" / "+x.s.length+" steps"; E("bar").style.width=(n/x.s.length*100)+"%";
+ const ySolid=550,yBase=465,top=85;
+ const nonLattice=x.s.length-1, gap=(yBase-top)/Math.max(1,nonLattice);
+ let ys=[yBase]; for(let i=1;i<=nonLattice;i++)ys.push(yBase-gap*i);
+
+ let h=`<defs>
+ <marker id="B" markerWidth="6" markerHeight="6" refX="5.4" refY="3" orient="auto"><path d="M0 0L6 3L0 6z" fill="#1976d2"/></marker>
+ <marker id="R" markerWidth="6" markerHeight="6" refX="5.4" refY="3" orient="auto"><path d="M0 0L6 3L0 6z" fill="#d71920"/></marker>
+ </defs><text x="20" y="32" font-size="14" font-weight="700">ENTHALPY</text>
+ <line x1="55" y1="552" x2="55" y2="74" stroke="#102a52" stroke-width="2"/><path d="M49 84L55 68L61 84" fill="#102a52"/>`;
+
+ const level=(Y,t,x1=145,x2=590,labelX=null)=>{const lx=labelX===null?(x1+x2)/2:labelX;h+=`<line x1="${x1}" y1="${Y}" x2="${x2}" y2="${Y}" stroke="#202b38" stroke-width="3"/><text x="${lx}" y="${Y-10}" text-anchor="middle" font-size="17" font-weight="600" fill="#102a52">${t}</text>`};
+
+ // Arrow shaft begins exactly at source line. The marker tip lands exactly at destination line.
+ // No artificial shortening is used.
+ const arrow=(Y1,Y2,X,t,val,side="right")=>{
+   const endo=val>0, col=endo?"#1976d2":"#d71920", mark=endo?"B":"R";
+   h+=`<line x1="${X}" y1="${Y1}" x2="${X}" y2="${Y2}" stroke="${col}" stroke-width="2.5" marker-end="url(#${mark})"/>`;
+   const tx=side==="left"?X-10:X+10, anc=side==="left"?"end":"start";
+   h+=`<text x="${tx}" y="${(Y1+Y2)/2-4}" text-anchor="${anc}" font-size="14" font-weight="700" fill="${col}">${t}</text>`;
+   if(show){
+     // The quantity selected as the Hess-law target must remain unknown in
+     // every cycle; all other available ΔH values are revealed.
+     const isFormation=t==="ΔH°f";
+     const isLattice=t==="ΔH°lattice";
+     const isPhaseAtom=(mode==="phase"&&((x.f==="NaBr"&&t==="ΔH°at(Br)")||(x.f==="MgI₂"&&t==="2ΔH°at(I)")));
+     const hideAsUnknown=(mode==="formation"&&isFormation)||(mode==="lattice"&&isLattice)||isPhaseAtom;
+     const shownVal=hideAsUnknown?"?":`${val>0?"+":""}${val} kJ mol⁻¹`;
+     h+=`<text x="${tx}" y="${(Y1+Y2)/2+14}" text-anchor="${anc}" font-size="12.5" font-weight="${hideAsUnknown?700:400}" fill="${col}">${shownVal}</text>`;
+   }
+ };
+
+ // Only solid is visible initially.
+ // Oxide cycles use an extended solid line so the lattice arrow terminates
+ // exactly at its far-right end, matching the annotated Na₂O/MgO layout.
+ const isOxide=(x.f==="Na₂O" || x.f==="MgO");
+ const oxideLatticeX=875;
+ level(ySolid,x.solid,270,isOxide?oxideLatticeX:820,455);
+ if(form){level(yBase,x.b);arrow(yBase,ySolid,590,"ΔH°f",x.hf,"right")}
+ if(n>0&&!form)level(yBase,x.b);
+
+ const mainX=205, ea1X=isOxide?625:590, ea2X=820, latticeX=isOxide?oxideLatticeX:815;
+ let currentY=yBase;
+
+ for(let i=0;i<n;i++){
+   const st=x.s[i], lattice=i===x.s.length-1;
+   if(lattice){
+     // Lattice dissociation: solid -> gaseous ions, positive/endothermic.
+     arrow(ySolid,currentY,latticeX,"ΔH°lattice",Math.abs(st[3]),"left");
+     continue;
+   }
+
+   const isEA1=/1st electron affinity|Electron affinity/.test(st[0]) && !/2nd/.test(st[0]);
+   const isEA2=/2nd electron affinity/.test(st[0]);
+
+   let nextY;
+   if(isEA1){
+     // First EA: ALWAYS exothermic for O, Cl, Br, I used here -> lower enthalpy.
+     nextY=currentY+62;
+   }else if(isEA2){
+     // Second EA of oxygen: endothermic -> higher enthalpy.
+     nextY=currentY-92;
+   }else{
+     // Atomization and ionization steps used here are endothermic.
+     nextY=currentY-gap;
+   }
+
+   // Keep diagram readable.
+   nextY=Math.max(82,Math.min(yBase-20,nextY));
+
+   const rightBranch=isEA1||isEA2;
+   const oxideCycle=(x.f==="Na₂O" || x.f==="MgO");
+   if(rightBranch){
+     // For oxide cycles, extend the pre-EA1 black level all the way to the
+     // red EA1 arrow so the arrow starts directly on that level.
+     if(isEA1 && isOxide){
+       h+=`<line x1="590" y1="${currentY}" x2="${ea1X}" y2="${currentY}" stroke="#202b38" stroke-width="3"/>`;
+     }
+     if(isEA2){
+       // Second electron affinity of oxygen: identical right-side upward
+       // geometry for both Na₂O and MgO.
+       level(nextY,st[2],590,isOxide?oxideLatticeX:840);
+       arrow(currentY,nextY,ea2X,st[1],st[3],"left");
+     }else{
+       // First electron affinity: exothermic downward arrow.
+       level(nextY,st[2],isOxide?ea1X:590,815);
+       arrow(currentY,nextY,ea1X,st[1],st[3],"left");
+     }
+   }else{
+     level(nextY,st[2],145,590);
+     arrow(currentY,nextY,mainX,st[1],st[3],"right");
+   }
+   currentY=nextY;
+ }
+ svg.innerHTML=h;
+}
+function challenge(){
+ let z=E("target").value,x=X(),special=(x.f==="NaBr"||x.f==="MgI₂");
+ if(z==="random"){let choices=special?["lattice","formation","phase"]:["lattice","formation"];mode=choices[Math.floor(Math.random()*choices.length)];}
+ else if(z==="phase"&&!special)mode="formation"; else mode=z;
+ E("phaseAnswerWrap").style.display="none"; E("answer1label").textContent=""; E("answer2label").textContent="";
+ if(mode==="lattice") E("question").innerHTML="Calculate the lattice enthalpy <b>(dissociation)</b> of "+x.f+" after constructing the cycle.";
+ else if(mode==="phase"&&x.f==="NaBr"){
+  E("question").innerHTML="<b>Two-part extension</b><br>First use the completed Born–Haber cycle and Hess's law to determine the unknown ΔH°<sub>at</sub>(Br). Then use your calculated atomization enthalpy and D(Br–Br) = 185 kJ mol⁻¹ to determine ΔH°<sub>vap</sub>(Br₂) for Br₂(l) → Br₂(g).<br><span class='small'>ΔH°at(Br) = ½ΔH°vap(Br₂) + ½D(Br–Br)</span>";
+  E("answer1label").innerHTML="1. ΔH°<sub>at</sub>(Br)"; E("answer2label").innerHTML="2. ΔH°<sub>vap</sub>(Br₂)"; E("phaseAnswerWrap").style.display="block";
+ }else if(mode==="phase"&&x.f==="MgI₂"){
+  E("question").innerHTML="<b>Two-part extension</b><br>First use the completed Born–Haber cycle and Hess's law to determine the unknown 2ΔH°<sub>at</sub>(I) for I₂(s) → 2I(g). Then use your calculated atomization contribution and D(I–I) = 152 kJ mol⁻¹ to determine ΔH°<sub>sub</sub>(I₂) for I₂(s) → I₂(g).<br><span class='small'>2ΔH°at(I) = ΔH°sub(I₂) + D(I–I)</span>";
+  E("answer1label").innerHTML="1. 2ΔH°<sub>at</sub>(I)"; E("answer2label").innerHTML="2. ΔH°<sub>sub</sub>(I₂)"; E("phaseAnswerWrap").style.display="block";
+ }else E("question").textContent="Calculate ΔH°f for "+x.f+".";
+ E("answer").value="";E("answer2").value="";E("result").textContent="";
+}
+function reset(){n=0;form=false;show=false;E("values").textContent="Show ΔH values";E("msg").textContent="Choose a process below.";buttons();challenge();draw()}
+E("compound").onchange=reset;E("target").onchange=challenge;E("reset").onclick=reset;E("values").onclick=()=>{show=!show;E("values").textContent=show?"Hide ΔH values":"Show ΔH values";draw()};E("check").onclick=()=>{
+ let x=X();
+ if(E("answer").value===""){E("result").textContent="Enter an answer first.";return}
+ if(mode==="phase"&&(x.f==="NaBr"||x.f==="MgI₂")){
+  if(E("answer2").value===""){E("result").textContent="Enter both answers before checking.";return}
+  let atomAns=x.f==="NaBr"?108:214, phaseAns=x.f==="NaBr"?31:62;
+  let a1=Number(E("answer").value),a2=Number(E("answer2").value),ok1=Math.abs(a1-atomAns)<=2,ok2=Math.abs(a2-phaseAns)<=2;
+  if(ok1&&ok2)E("result").innerHTML="Correct ✓<br>Atomization: "+atomAns+" kJ mol⁻¹<br>Phase change: "+phaseAns+" kJ mol⁻¹";
+  else if(!ok1)E("result").textContent="Check the atomization enthalpy first using the Born–Haber cycle. Then use that result for the phase-change calculation.";
+  else E("result").textContent="Your atomization value is correct. Recheck the bond-enthalpy relationship for the phase change.";
+  return;
+ }
+ let ans=mode==="formation"?x.hf:Math.abs(x.s.at(-1)[3]),z=Number(E("answer").value);
+ E("result").textContent=Math.abs(z-ans)<=2?"Correct ✓ "+ans+" kJ mol⁻¹":"Not quite — check the relationship and your signs, then try again.";
+};reset();
+</script></body></html>
