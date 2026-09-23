@@ -1,0 +1,228 @@
+<h2 class="sr-only">An interactive neon-themed simulation of collision theory on a black background: cyan and magenta particles move randomly and only react to form a green product when they collide with enough kinetic energy and the right orientation. Sliders control temperature and concentration.</h2>
+
+<div style="background:#000; border-radius:12px; padding:1.25rem;">
+
+<div style="display:flex; flex-wrap:wrap; gap:24px; margin-bottom:1rem;">
+<div style="display:flex; align-items:center; gap:10px; flex:1; min-width:220px;">
+<label for="temp2" style="font-size:14px; color:#39FF6A; white-space:nowrap;">Temperature</label>
+<input type="range" id="temp2" min="1" max="10" value="4" step="1" style="flex:1; accent-color:#39FF6A;"/>
+<span id="tempOut2" style="font-size:14px; font-weight:500; min-width:20px; color:#FFD700;">4</span>
+</div>
+<div style="display:flex; align-items:center; gap:10px; flex:1; min-width:220px;">
+<label for="conc2" style="font-size:14px; color:#39FF6A; white-space:nowrap;">Concentration</label>
+<input type="range" id="conc2" min="10" max="50" value="26" step="2" style="flex:1; accent-color:#39FF6A;"/>
+<span id="concOut2" style="font-size:14px; font-weight:500; min-width:20px; color:#FFD700;">26</span>
+</div>
+<button id="resetBtn2" style="white-space:nowrap; background:#000; color:#FFD700; border:1px solid #FFD700; border-radius:6px; padding:6px 14px; cursor:pointer;">Reset simulation</button>
+</div>
+
+<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:12px; margin-bottom:1rem;">
+<div style="background:#0a0a0a; border:1px solid #00F0FF; border-radius:8px; padding:1rem; box-shadow:0 0 8px rgba(0,240,255,0.4);">
+<p style="font-size:13px; color:#7FDBFF; margin:0 0 4px;">Total collisions</p>
+<p style="font-size:24px; font-weight:500; margin:0; color:#00F0FF;" id="totalOut2">0</p>
+</div>
+<div style="background:#0a0a0a; border:1px solid #39FF6A; border-radius:8px; padding:1rem; box-shadow:0 0 8px rgba(57,255,106,0.4);">
+<p style="font-size:13px; color:#9CFFB0; margin:0 0 4px;">Successful</p>
+<p style="font-size:24px; font-weight:500; margin:0; color:#39FF6A;" id="successOut2">0</p>
+</div>
+<div style="background:#0a0a0a; border:1px solid #FFD700; border-radius:8px; padding:1rem; box-shadow:0 0 8px rgba(255,215,0,0.4);">
+<p style="font-size:13px; color:#FFE680; margin:0 0 4px;">Success rate</p>
+<p style="font-size:24px; font-weight:500; margin:0; color:#FFD700;" id="rateOut2">0%</p>
+</div>
+<div style="background:#0a0a0a; border:1px solid #FF2DD7; border-radius:8px; padding:1rem; box-shadow:0 0 8px rgba(255,45,215,0.4);">
+<p style="font-size:13px; color:#FF9EE9; margin:0 0 4px;">Reactants left</p>
+<p style="font-size:24px; font-weight:500; margin:0; color:#FF2DD7;" id="leftOut2">0</p>
+</div>
+</div>
+
+<div style="border:1px solid #00F0FF; border-radius:10px; overflow:hidden; box-shadow:0 0 14px rgba(0,240,255,0.35);">
+<canvas id="cv2" width="640" height="320" style="display:block; width:100%; height:auto; background:#000;"></canvas>
+</div>
+
+<div style="display:flex; gap:18px; margin-top:12px; flex-wrap:wrap;">
+<div style="display:flex; align-items:center; gap:6px; font-size:13px; color:#9CD8FF;"><span style="width:10px;height:10px;border-radius:50%;background:#00F0FF;box-shadow:0 0 6px #00F0FF;display:inline-block;"></span>Reactant A</div>
+<div style="display:flex; align-items:center; gap:6px; font-size:13px; color:#FF9EE9;"><span style="width:10px;height:10px;border-radius:50%;background:#FF2DD7;box-shadow:0 0 6px #FF2DD7;display:inline-block;"></span>Reactant B</div>
+<div style="display:flex; align-items:center; gap:6px; font-size:13px; color:#9CFFB0;"><span style="width:10px;height:10px;border-radius:50%;background:#39FF6A;box-shadow:0 0 6px #39FF6A;display:inline-block;"></span>Product</div>
+<div style="display:flex; align-items:center; gap:6px; font-size:13px; color:#FFD580;"><span style="width:10px;height:10px;border-radius:50%;border:1.5px solid #FFA500;display:inline-block;"></span>Ineffective collision</div>
+</div>
+
+</div>
+
+<script>
+(function(){
+var canvas = document.getElementById('cv2');
+var ctx = canvas.getContext('2d');
+var W = 640, H = 320;
+var ACT_ENERGY = 60;
+var ORIENT_PROB = 0.45;
+var particles = [];
+var total = 0, success = 0;
+var flashes = [];
+
+function rand(a,b){ return a + Math.random()*(b-a); }
+
+function speedRange(){
+  var t = parseInt(document.getElementById('temp2').value,10);
+  return [0.5 + 0.15*t, 1.4 + 0.32*t];
+}
+
+function makeParticle(type){
+  var r = 7;
+  var sr = speedRange();
+  var ang = rand(0, Math.PI*2);
+  var sp = rand(sr[0], sr[1]);
+  return {
+    x: rand(r, W-r), y: rand(r, H-r),
+    vx: Math.cos(ang)*sp, vy: Math.sin(ang)*sp,
+    r: r, type: type
+  };
+}
+
+function init(){
+  var n = parseInt(document.getElementById('conc2').value,10);
+  particles = [];
+  for(var i=0;i<n;i++){
+    particles.push(makeParticle(i%2===0 ? 'A':'B'));
+  }
+  total = 0; success = 0; flashes = [];
+  updateStats();
+}
+
+function updateStats(){
+  document.getElementById('totalOut2').textContent = total;
+  document.getElementById('successOut2').textContent = success;
+  var rate = total > 0 ? Math.round((success/total)*100) : 0;
+  document.getElementById('rateOut2').textContent = rate + '%';
+  var left = particles.filter(function(p){ return p.type==='A' || p.type==='B'; }).length;
+  document.getElementById('leftOut2').textContent = left;
+}
+
+function colorFor(type){
+  if(type==='A') return '#00F0FF';
+  if(type==='B') return '#FF2DD7';
+  return '#39FF6A';
+}
+
+function step(){
+  var sr = speedRange();
+  var maxSp = sr[1];
+
+  for(var i=0;i<particles.length;i++){
+    var p = particles[i];
+    p.x += p.vx; p.y += p.vy;
+    if(p.x - p.r < 0){ p.x = p.r; p.vx *= -1; }
+    if(p.x + p.r > W){ p.x = W - p.r; p.vx *= -1; }
+    if(p.y - p.r < 0){ p.y = p.r; p.vy *= -1; }
+    if(p.y + p.r > H){ p.y = H - p.r; p.vy *= -1; }
+    var sp = Math.sqrt(p.vx*p.vx + p.vy*p.vy);
+    if(sp > maxSp*1.4){
+      var sc = (maxSp*1.1)/sp;
+      p.vx *= sc; p.vy *= sc;
+    }
+  }
+
+  var toRemove = {};
+  var toAdd = [];
+
+  for(var a=0; a<particles.length; a++){
+    if(toRemove[a]) continue;
+    var p1 = particles[a];
+    for(var b=a+1; b<particles.length; b++){
+      if(toRemove[b]) continue;
+      var p2 = particles[b];
+      var dx = p1.x-p2.x, dy = p1.y-p2.y;
+      var dist = Math.sqrt(dx*dx+dy*dy);
+      if(dist < p1.r + p2.r){
+        var rvx = p1.vx-p2.vx, rvy = p1.vy-p2.vy;
+        var relSpeed = Math.sqrt(rvx*rvx+rvy*rvy);
+        var ke = 0.5*relSpeed*relSpeed*40;
+
+        var canReact = ((p1.type==='A'&&p2.type==='B') || (p1.type==='B'&&p2.type==='A'));
+
+        if(canReact){
+          total++;
+          var orientedOk = Math.random() < ORIENT_PROB;
+          if(ke >= ACT_ENERGY && orientedOk){
+            success++;
+            toRemove[a]=true; toRemove[b]=true;
+            var mx = (p1.x+p2.x)/2, my=(p1.y+p2.y)/2;
+            toAdd.push({
+              x:mx, y:my,
+              vx:(p1.vx+p2.vx)/2, vy:(p1.vy+p2.vy)/2,
+              r:9, type:'P'
+            });
+            flashes.push({x:mx,y:my,r:9,life:18,ok:true});
+          } else {
+            flashes.push({x:(p1.x+p2.x)/2,y:(p1.y+p2.y)/2,r:9,life:14,ok:false});
+            var nx = dx/(dist||1), ny = dy/(dist||1);
+            var overlap = (p1.r+p2.r-dist)/2;
+            p1.x += nx*overlap; p1.y += ny*overlap;
+            p2.x -= nx*overlap; p2.y -= ny*overlap;
+            var tmpvx=p1.vx, tmpvy=p1.vy;
+            p1.vx=p2.vx; p1.vy=p2.vy;
+            p2.vx=tmpvx; p2.vy=tmpvy;
+          }
+        } else {
+          var nx2 = dx/(dist||1), ny2 = dy/(dist||1);
+          var overlap2 = (p1.r+p2.r-dist)/2;
+          p1.x += nx2*overlap2; p1.y += ny2*overlap2;
+          p2.x -= nx2*overlap2; p2.y -= ny2*overlap2;
+          var tv1x=p1.vx, tv1y=p1.vy;
+          p1.vx=p2.vx; p1.vy=p2.vy;
+          p2.vx=tv1x; p2.vy=tv1y;
+        }
+      }
+    }
+  }
+
+  if(Object.keys(toRemove).length){
+    var next = [];
+    for(var k=0;k<particles.length;k++){
+      if(!toRemove[k]) next.push(particles[k]);
+    }
+    particles = next.concat(toAdd);
+  }
+
+  updateStats();
+  draw();
+  requestAnimationFrame(step);
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  for(var i=0;i<particles.length;i++){
+    var p = particles[i];
+    ctx.save();
+    ctx.shadowColor = colorFor(p.type);
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+    ctx.fillStyle = colorFor(p.type);
+    ctx.fill();
+    ctx.restore();
+  }
+  for(var f=flashes.length-1; f>=0; f--){
+    var fl = flashes[f];
+    fl.r += 1.6; fl.life -= 1;
+    ctx.beginPath();
+    ctx.arc(fl.x, fl.y, fl.r, 0, Math.PI*2);
+    ctx.strokeStyle = fl.ok ? 'rgba(57,255,106,' + (fl.life/18) + ')' : 'rgba(255,165,0,' + (fl.life/14) + ')';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    if(fl.life <= 0) flashes.splice(f,1);
+  }
+}
+
+document.getElementById('temp2').addEventListener('input', function(e){
+  document.getElementById('tempOut2').textContent = e.target.value;
+});
+document.getElementById('conc2').addEventListener('input', function(e){
+  document.getElementById('concOut2').textContent = e.target.value;
+});
+document.getElementById('conc2').addEventListener('change', init);
+document.getElementById('resetBtn2').addEventListener('click', init);
+
+init();
+requestAnimationFrame(step);
+})();
+</script>

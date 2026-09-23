@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Collision Orientation Simulator — Esterification</title>
+<style>
+body{background:#050505;color:#eafcff;font-family:-apple-system,'Segoe UI',sans-serif;margin:0;padding:24px;}
+.wrap{max-width:760px;margin:0 auto;}
+h1{font-size:20px;color:#fff;text-shadow:0 0 8px #ff2fd6;margin:0 0 4px;}
+.subtitle{font-size:13px;color:#9aa0ff;margin:0 0 20px;}
+.caption{font-size:13px;color:#7d7dff;margin:0 0 8px;}
+.neon-card{background:#000;border:1px solid #ff2fd6;border-radius:12px;padding:1.1rem 1.3rem;margin-bottom:1.4rem;box-shadow:0 0 14px rgba(255,47,214,0.35);}
+.neon-row{display:flex;align-items:center;gap:12px;margin:10px 0;flex-wrap:wrap;}
+.neon-label{font-size:13px;color:#8be9ff;min-width:150px;text-shadow:0 0 4px rgba(53,224,255,0.5);}
+.neon-btn{background:#000;border:1px solid #35e0ff;color:#35e0ff;border-radius:6px;padding:8px 18px;font-size:13px;cursor:pointer;text-shadow:0 0 4px #35e0ff;box-shadow:0 0 6px rgba(53,224,255,0.35);}
+.neon-btn:hover{box-shadow:0 0 14px rgba(53,224,255,0.8);}
+.neon-metric{background:#000;border:1px solid #35e0ff;border-radius:8px;padding:0.75rem 1rem;text-align:center;box-shadow:0 0 8px rgba(53,224,255,0.25);}
+.neon-metric .num{font-size:22px;font-weight:600;color:#fff;text-shadow:0 0 6px #35e0ff;}
+.neon-metric .lbl{font-size:12px;color:#8be9ff;}
+.neon-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:#c9c9ff;margin-top:12px;}
+.neon-dot{width:10px;height:10px;border-radius:50%;display:inline-block;}
+.neon-result{font-size:13px;padding:10px 14px;border-radius:8px;margin-top:10px;min-height:20px;border:1px solid #222;background:#000;color:#8be9ff;transition:background 0.2s;}
+.neon-val{min-width:44px;text-align:right;font-size:13px;color:#fff;text-shadow:0 0 4px #35e0ff;}
+.style-picker{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;}
+.style-picker label{font-size:12px;color:#8be9ff;background:#000;border:1px solid #35e0ff44;border-radius:20px;padding:6px 12px;cursor:pointer;}
+.style-picker input{accent-color:#35e0ff;margin-right:5px;}
+.style-picker label.active{border-color:#35e0ff;box-shadow:0 0 8px rgba(53,224,255,0.5);}
+input[type=range]{accent-color:#35e0ff;width:100%;}
+input[type=checkbox]{accent-color:#35e0ff;}
+.mech-note{font-size:12px;color:#ffcf7d;margin-top:6px;text-shadow:0 0 4px rgba(255,159,47,0.4);}
+.gauge{background:#111;border:1px solid #444;border-radius:6px;height:10px;overflow:hidden;margin:4px 0 2px 162px;}
+.gauge-fill{height:100%;background:#ff3b3b;transition:width 0.3s, background-color 0.3s;}
+.gauge-label{font-size:11px;color:#ffcf7d;margin:0 0 8px 162px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Correct Collision Orientation — Esterification</h1>
+<p class="subtitle">Ethanoic acid + ethanol &rarr; ethyl ethanoate + water. The hydroxyl groups must meet for the collision to succeed.</p>
+
+<div class="style-picker" role="radiogroup" aria-label="Structural formula style">
+  <label class="active" data-style="full" onclick="setStyle('full')"><input type="radio" name="style" checked>Full structural</label>
+  <label data-style="skeletal" onclick="setStyle('skeletal')"><input type="radio" name="style">Skeletal</label>
+  <label data-style="stereo" onclick="setStyle('stereo')"><input type="radio" name="style">Stereochemical</label>
+</div>
+
+<div class="neon-card">
+  <svg width="100%" height="260" viewBox="0 0 640 260" role="img" aria-label="Two adjustable molecules that collide, recoil if misaligned, or form ester and water if aligned">
+    <rect x="0" y="0" width="640" height="260" fill="#000000"/>
+    <g id="acid-g" transform="translate(170,130)"></g>
+    <g id="ethanol-g" transform="translate(470,130)"></g>
+    <g id="mech-g"></g>
+    <g id="flash-g"></g>
+  </svg>
+  <div class="neon-row">
+    <span class="neon-label">Ethanoic acid tilt</span>
+    <input type="range" id="acidSlider" min="-180" max="180" value="0" step="5" style="flex:1" oninput="updateManual()">
+    <span id="acidVal" class="neon-val">0&deg;</span>
+  </div>
+  <div class="neon-row">
+    <span class="neon-label">Ethanol tilt</span>
+    <input type="range" id="ethanolSlider" min="-180" max="180" value="0" step="5" style="flex:1" oninput="updateManual()">
+    <span id="ethanolVal" class="neon-val">0&deg;</span>
+  </div>
+  <div style="display:flex;gap:10px;">
+    <button class="neon-btn" onclick="testCollision()">Test collision</button>
+    <button class="neon-btn" onclick="resetManual()">Reset</button>
+  </div>
+  <div class="neon-result" id="manualResult"></div>
+  <div class="mech-note" id="mechNote"></div>
+</div>
+
+<p style="font-size:12px;color:#666;">Collision theory note: this simulation assumes each collision already has enough energy; it isolates the <em>orientation</em> requirement. In the real mechanism it is specifically the oxygen lone pair of the alcohol attacking the carbonyl carbon of the acid. The "stereochemical" view shows the real tetrahedral geometry at sp3 carbons (wedge/dash bonds) and the flat, trigonal-planar geometry at the carbonyl carbon (no wedge/dash there, since it has no front/back face).</p>
+
+</div>
+<script>
+// ===== Neon color palette =====
+const COL = {
+  acidC:'#35e0ff', ethC:'#ffe14d', esterC:'#39ff6a', waterO:'#8a7dff',
+  O:'#ff2fd6', H:'#eafcff', amber:'#ff9f2f', bad:'#ff3b3b', good:'#39ff6a'
+};
+
+// ===== Build a drawing "spec" for a molecule in a given structural style =====
+// type: 'acid' | 'ethanol' | 'ester' | 'water'
+// style: 'full' | 'skeletal' | 'condensed' | 'stereo'
+// Local frame convention: the reactive end (the -OH that must collide) points along local +x.
+function getSpec(type, style){
+  if(style==='condensed'){
+    const map = {
+      acid:{text:'CH3COOH', color:COL.acidC},
+      ethanol:{text:'CH3CH2OH', color:COL.ethC},
+      ester:{text:'CH3COOCH2CH3', color:COL.esterC},
+      water:{text:'H2O', color:COL.waterO}
+    };
+    return {condensed:map[type]};
+  }
+  if(type==='water'){
+    // water is drawn the same way regardless of style (no carbon skeleton to simplify)
+    return {
+      bonds:[
+        {x1:0,y1:0,x2:-11,y2:9,kind:'single',color:COL.waterO},
+        {x1:0,y1:0,x2:11,y2:9,kind:'single',color:COL.waterO}
+      ],
+      atoms:[
+        {x:0,y:0,r:9,color:COL.waterO,label:'O'},
+        {x:-11,y:9,r:5,color:COL.H,label:'H'},
+        {x:11,y:9,r:5,color:COL.H,label:'H'}
+      ],
+      highlight:null
+    };
+  }
+
+  const CC = type==='acid'?COL.acidC : type==='ethanol'?COL.ethC : COL.esterC;
+
+  if(style==='skeletal'){
+    if(type==='acid'){
+      return {
+        bonds:[
+          {x1:-40,y1:8,x2:-16,y2:-8,kind:'single',color:CC},
+          {x1:-16,y1:-8,x2:-16,y2:-26,kind:'double',color:CC},
+          {x1:-16,y1:-8,x2:8,y2:8,kind:'single',color:CC}
+        ],
+        atoms:[
+          {x:-16,y:-26,r:0,color:COL.O,label:'O'},
+          {x:8,y:8,r:0,color:COL.O,label:'O'},
+          {x:26,y:8,r:0,color:COL.H,label:'H'}
+        ],
+        highlight:{x:17,y:8,r:15},
+        reactC:{x:-16,y:-8}, leaveO:{x:8,y:8}
+      };
+    }
+    if(type==='ethanol'){
+      return {
+        bonds:[
+          {x1:-37,y1:8,x2:-13,y2:-8,kind:'single',color:CC},
+          {x1:-13,y1:-8,x2:10,y2:8,kind:'single',color:CC}
+        ],
+        atoms:[
+          {x:10,y:8,r:0,color:COL.O,label:'O'},
+          {x:28,y:8,r:0,color:COL.H,label:'H'}
+        ],
+        highlight:{x:19,y:8,r:15},
+        attackO:{x:10,y:8}
+      };
+    }
+    // ester skeletal
+    return {
+      bonds:[
+        {x1:-55,y1:8,x2:-31,y2:-8,kind:'single',color:CC},
+        {x1:-31,y1:-8,x2:-31,y2:-26,kind:'double',color:CC},
+        {x1:-31,y1:-8,x2:-6,y2:8,kind:'single',color:CC},
+        {x1:-6,y1:8,x2:17,y2:-8,kind:'single',color:CC},
+        {x1:17,y1:-8,x2:39,y2:8,kind:'single',color:CC}
+      ],
+      atoms:[
+        {x:-31,y:-26,r:0,color:COL.O,label:'O'},
+        {x:-6,y:8,r:0,color:COL.O,label:'O'}
+      ],
+      highlight:null
+    };
+  }
+
+  if(style==='stereo'){
+    // Real geometry: sp3 carbons drawn as zigzag with wedge/dash H's (tetrahedral,
+    // ~109.5 deg implied), sp2 carbonyl carbon drawn fully flat/planar (~120 deg,
+    // all plain bonds -- no wedge/dash, since it has no front/back ambiguity),
+    // and the ether/hydroxyl oxygen bonds bent rather than colinear (~105 deg).
+    if(type==='acid'){
+      return {
+        bonds:[
+          {x1:-46,y1:10,x2:-46,y2:26,kind:'wedge',color:CC},
+          {x1:-46,y1:10,x2:-60,y2:2,kind:'dash',color:CC},
+          {x1:-46,y1:10,x2:-34,y2:24,kind:'single',color:CC},
+          {x1:-46,y1:10,x2:-20,y2:-10,kind:'single',color:CC},
+          {x1:-20,y1:-10,x2:-20,y2:-30,kind:'double',color:CC},
+          {x1:-20,y1:-10,x2:4,y2:-2,kind:'single',color:CC},
+          {x1:4,y1:-2,x2:26,y2:10,kind:'single',color:COL.O}
+        ],
+        atoms:[
+          {x:-46,y:10,r:7,color:CC,label:'C'},
+          {x:-46,y:26,r:5,color:COL.H,label:'H'},
+          {x:-60,y:2,r:5,color:COL.H,label:'H'},
+          {x:-34,y:24,r:5,color:COL.H,label:'H'},
+          {x:-20,y:-10,r:7,color:CC,label:'C'},
+          {x:-20,y:-30,r:7,color:COL.O,label:'O'},
+          {x:4,y:-2,r:7,color:COL.O,label:'O'},
+          {x:26,y:10,r:5,color:COL.H,label:'H'}
+        ],
+        highlight:{x:15,y:4,r:15},
+        reactC:{x:-20,y:-10}, leaveO:{x:4,y:-2}
+      };
+    }
+    if(type==='ethanol'){
+      return {
+        bonds:[
+          {x1:-46,y1:10,x2:-46,y2:26,kind:'wedge',color:CC},
+          {x1:-46,y1:10,x2:-60,y2:2,kind:'dash',color:CC},
+          {x1:-46,y1:10,x2:-34,y2:24,kind:'single',color:CC},
+          {x1:-46,y1:10,x2:-20,y2:-10,kind:'single',color:CC},
+          {x1:-20,y1:-10,x2:-30,y2:-26,kind:'wedge',color:CC},
+          {x1:-20,y1:-10,x2:-10,y2:-27,kind:'dash',color:CC},
+          {x1:-20,y1:-10,x2:2,y2:8,kind:'single',color:COL.O},
+          {x1:2,y1:8,x2:24,y2:2,kind:'single',color:COL.O}
+        ],
+        atoms:[
+          {x:-46,y:10,r:7,color:CC,label:'C'},
+          {x:-46,y:26,r:5,color:COL.H,label:'H'},
+          {x:-60,y:2,r:5,color:COL.H,label:'H'},
+          {x:-34,y:24,r:5,color:COL.H,label:'H'},
+          {x:-20,y:-10,r:7,color:CC,label:'C'},
+          {x:-30,y:-26,r:5,color:COL.H,label:'H'},
+          {x:-10,y:-27,r:5,color:COL.H,label:'H'},
+          {x:2,y:8,r:7,color:COL.O,label:'O'},
+          {x:24,y:2,r:5,color:COL.H,label:'H'}
+        ],
+        highlight:{x:13,y:5,r:15},
+        attackO:{x:2,y:8}
+      };
+    }
+    // ester stereo
+    return {
+      bonds:[
+        {x1:-70,y1:10,x2:-70,y2:26,kind:'wedge',color:CC},
+        {x1:-70,y1:10,x2:-84,y2:2,kind:'dash',color:CC},
+        {x1:-70,y1:10,x2:-58,y2:24,kind:'single',color:CC},
+        {x1:-70,y1:10,x2:-44,y2:-10,kind:'single',color:CC},
+        {x1:-44,y1:-10,x2:-44,y2:-30,kind:'double',color:CC},
+        {x1:-44,y1:-10,x2:-20,y2:-2,kind:'single',color:CC},
+        {x1:-20,y1:-2,x2:2,y2:-16,kind:'single',color:COL.O},
+        {x1:2,y1:-16,x2:2,y2:-32,kind:'wedge',color:CC},
+        {x1:2,y1:-16,x2:18,y2:-32,kind:'dash',color:CC},
+        {x1:2,y1:-16,x2:26,y2:2,kind:'single',color:CC},
+        {x1:26,y1:2,x2:26,y2:18,kind:'wedge',color:CC},
+        {x1:26,y1:2,x2:40,y2:-6,kind:'dash',color:CC},
+        {x1:26,y1:2,x2:40,y2:18,kind:'single',color:CC}
+      ],
+      atoms:[
+        {x:-70,y:10,r:7,color:CC,label:'C'},
+        {x:-70,y:26,r:5,color:COL.H,label:'H'},
+        {x:-84,y:2,r:5,color:COL.H,label:'H'},
+        {x:-58,y:24,r:5,color:COL.H,label:'H'},
+        {x:-44,y:-10,r:7,color:CC,label:'C'},
+        {x:-44,y:-30,r:7,color:COL.O,label:'O'},
+        {x:-20,y:-2,r:7,color:COL.O,label:'O'},
+        {x:2,y:-16,r:7,color:CC,label:'C'},
+        {x:2,y:-32,r:5,color:COL.H,label:'H'},
+        {x:18,y:-32,r:5,color:COL.H,label:'H'},
+        {x:26,y:2,r:7,color:CC,label:'C'},
+        {x:26,y:18,r:5,color:COL.H,label:'H'},
+        {x:40,y:-6,r:5,color:COL.H,label:'H'},
+        {x:40,y:18,r:5,color:COL.H,label:'H'}
+      ],
+      highlight:null
+    };
+  }
+
+  // ---- FULL structural ----
+  let spec;
+  if(type==='acid'){
+    spec = {
+      bonds:[
+        {id:'c1ha',x1:-40,y1:0,x2:-40,y2:-16,kind:'single',color:CC},
+        {id:'c1hb',x1:-40,y1:0,x2:-40,y2:16,kind:'single',color:CC},
+        {id:'c1hc',x1:-40,y1:0,x2:-58,y2:0,kind:'single',color:CC},
+        {x1:-40,y1:0,x2:-16,y2:0,kind:'single',color:CC},
+        {x1:-16,y1:0,x2:-16,y2:-20,kind:'double',color:CC},
+        {x1:-16,y1:0,x2:8,y2:0,kind:'single',color:CC},
+        {x1:8,y1:0,x2:26,y2:0,kind:'single',color:COL.O}
+      ],
+      atoms:[
+        {x:-40,y:0,r:8,color:CC,label:'C'},
+        {x:-40,y:-16,r:5,color:COL.H,label:'H'},
+        {x:-40,y:16,r:5,color:COL.H,label:'H'},
+        {x:-58,y:0,r:5,color:COL.H,label:'H'},
+        {x:-16,y:0,r:8,color:CC,label:'C'},
+        {x:-16,y:-20,r:8,color:COL.O,label:'O'},
+        {x:8,y:0,r:8,color:COL.O,label:'O'},
+        {x:26,y:0,r:5,color:COL.H,label:'H'}
+      ],
+      highlight:{x:17,y:0,r:15},
+      reactC:{x:-16,y:0}, leaveO:{x:8,y:0}
+    };
+  } else if(type==='ethanol'){
+    spec = {
+      bonds:[
+        {id:'c1ha',x1:-37,y1:0,x2:-37,y2:-16,kind:'single',color:CC},
+        {id:'c1hb',x1:-37,y1:0,x2:-37,y2:16,kind:'single',color:CC},
+        {x1:-37,y1:0,x2:-55,y2:0,kind:'single',color:CC},
+        {x1:-37,y1:0,x2:-13,y2:0,kind:'single',color:CC},
+        {id:'c2ha',x1:-13,y1:0,x2:-13,y2:-16,kind:'single',color:CC},
+        {id:'c2hb',x1:-13,y1:0,x2:-13,y2:16,kind:'single',color:CC},
+        {x1:-13,y1:0,x2:10,y2:0,kind:'single',color:COL.O},
+        {x1:10,y1:0,x2:28,y2:0,kind:'single',color:COL.O}
+      ],
+      atoms:[
+        {x:-37,y:0,r:8,color:CC,label:'C'},
+        {x:-37,y:-16,r:5,color:COL.H,label:'H'},
+        {x:-37,y:16,r:5,color:COL.H,label:'H'},
+        {x:-55,y:0,r:5,color:COL.H,label:'H'},
+        {x:-13,y:0,r:8,color:CC,label:'C'},
+        {x:-13,y:-16,r:5,color:COL.H,label:'H'},
+        {x:-13,y:16,r:5,color:COL.H,label:'H'},
+        {x:10,y:0,r:8,color:COL.O,label:'O'},
+        {x:28,y:0,r:5,color:COL.H,label:'H'}
+      ],
+      highlight:{x:19,y:0,r:15},
+      attackO:{x:10,y:0}
+    };
+  } else { // ester
+    spec = {
+      bonds:[
+        {x1:-55,y1:0,x2:-55,y2:-16,kind:'single',color:CC},
+        {x1:-55,y1:0,x2:-55,y2:16,kind:'single',color:CC},
+        {x1:-55,y1:0,x2:-73,y2:0,kind:'single',color:CC},
+        {x1:-55,y1:0,x2:-31,y2:0,kind:'single',color:CC},
+        {x1:-31,y1:0,x2:-31,y2:-20,kind:'double',color:CC},
+        {x1:-31,y1:0,x2:-6,y2:0,kind:'single',color:COL.O},
+        {x1:-6,y1:0,x2:17,y2:0,kind:'single',color:COL.O},
+        {id:'c3ha',x1:17,y1:0,x2:17,y2:-16,kind:'single',color:CC},
+        {id:'c3hb',x1:17,y1:0,x2:17,y2:16,kind:'single',color:CC},
+        {x1:17,y1:0,x2:39,y2:0,kind:'single',color:CC},
+        {x1:39,y1:0,x2:39,y2:-16,kind:'single',color:CC},
+        {x1:39,y1:0,x2:39,y2:16,kind:'single',color:CC},
+        {x1:39,y1:0,x2:57,y2:0,kind:'single',color:CC}
+      ],
+      atoms:[
+        {x:-55,y:0,r:8,color:CC,label:'C'},
+        {x:-55,y:-16,r:5,color:COL.H,label:'H'},
+        {x:-55,y:16,r:5,color:COL.H,label:'H'},
+        {x:-73,y:0,r:5,color:COL.H,label:'H'},
+        {x:-31,y:0,r:8,color:CC,label:'C'},
+        {x:-31,y:-20,r:8,color:COL.O,label:'O'},
+        {x:-6,y:0,r:8,color:COL.O,label:'O'},
+        {x:17,y:0,r:8,color:CC,label:'C'},
+        {x:17,y:-16,r:5,color:COL.H,label:'H'},
+        {x:17,y:16,r:5,color:COL.H,label:'H'},
+        {x:39,y:0,r:8,color:CC,label:'C'},
+        {x:39,y:-16,r:5,color:COL.H,label:'H'},
+        {x:39,y:16,r:5,color:COL.H,label:'H'},
+        {x:57,y:0,r:5,color:COL.H,label:'H'}
+      ],
+      highlight:null
+    };
+  }
+
+  return spec;
+}
+
+// ===== Canvas renderer =====
+function neonLineC(c,x1,y1,x2,y2,color,w){
+  c.save(); c.shadowColor=color; c.shadowBlur=8;
+  c.strokeStyle=color; c.lineWidth=w||2.2;
+  c.beginPath(); c.moveTo(x1,y1); c.lineTo(x2,y2); c.stroke();
+  c.restore();
+}
+function wedgeC(c,x1,y1,x2,y2,color){
+  const dx=x2-x1, dy=y2-y1, len=Math.hypot(dx,dy);
+  const nx=-dy/len, ny=dx/len, w=5;
+  c.save(); c.shadowColor=color; c.shadowBlur=8;
+  c.fillStyle=color;
+  c.beginPath();
+  c.moveTo(x1,y1);
+  c.lineTo(x2+nx*w, y2+ny*w);
+  c.lineTo(x2-nx*w, y2-ny*w);
+  c.closePath(); c.fill();
+  c.restore();
+}
+function dashC(c,x1,y1,x2,y2,color){
+  const steps=5;
+  c.save(); c.shadowColor=color; c.shadowBlur=8; c.strokeStyle=color; c.lineWidth=2;
+  for(let i=1;i<=steps;i++){
+    const t=i/steps;
+    const px=x1+(x2-x1)*t, py=y1+(y2-y1)*t;
+    const dx=x2-x1, dy=y2-y1, len=Math.hypot(dx,dy);
+    const nx=-dy/len, ny=dx/len, w=1+t*4;
+    c.beginPath(); c.moveTo(px-nx*w,py-ny*w); c.lineTo(px+nx*w,py+ny*w); c.stroke();
+  }
+  c.restore();
+}
+function atomC(c,x,y,r,color,label){
+  c.save();
+  if(r>0){
+    c.shadowColor=color; c.shadowBlur=9;
+    c.beginPath(); c.arc(x,y,r,0,Math.PI*2);
+    c.fillStyle='#000'; c.fill();
+    c.lineWidth=1.6; c.strokeStyle=color; c.stroke();
+    c.shadowBlur=0;
+  } else {
+    c.shadowColor=color; c.shadowBlur=6;
+  }
+  c.fillStyle=color;
+  c.font=(r>0?'8.5px':'10px')+' sans-serif';
+  c.textAlign='center'; c.textBaseline='middle';
+  c.fillText(label,x,y+0.5);
+  c.restore();
+}
+function renderSpecCanvas(ctx, spec, scale){
+  scale = scale||1;
+  ctx.save();
+  ctx.scale(scale,scale);
+  if(spec.condensed){
+    const pad=10, txt=spec.condensed.text, color=spec.condensed.color;
+    ctx.font='13px monospace';
+    const w = ctx.measureText(txt).width;
+    ctx.save(); ctx.shadowColor=color; ctx.shadowBlur=8;
+    ctx.strokeStyle=color; ctx.lineWidth=1.8;
+    roundRectPath(ctx,-w/2-pad,-14,w+pad*2,28,7); ctx.stroke();
+    ctx.fillStyle=color; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(txt,0,0.5);
+    // reactive-end tick
+    ctx.beginPath(); ctx.moveTo(w/2+pad,0); ctx.lineTo(w/2+pad+10,0); ctx.stroke();
+    ctx.restore();
+    ctx.restore();
+    return;
+  }
+  for(const b of spec.bonds){
+    if(b.kind==='double'){
+      const dx=b.x2-b.x1, dy=b.y2-b.y1, len=Math.hypot(dx,dy);
+      const nx=-dy/len*3, ny=dx/len*3;
+      neonLineC(ctx,b.x1+nx,b.y1+ny,b.x2+nx,b.y2+ny,b.color);
+      neonLineC(ctx,b.x1-nx,b.y1-ny,b.x2-nx,b.y2-ny,b.color);
+    } else if(b.kind==='wedge'){ wedgeC(ctx,b.x1,b.y1,b.x2,b.y2,b.color); }
+    else if(b.kind==='dash'){ dashC(ctx,b.x1,b.y1,b.x2,b.y2,b.color); }
+    else { neonLineC(ctx,b.x1,b.y1,b.x2,b.y2,b.color); }
+  }
+  if(spec.highlight){
+    ctx.save(); ctx.globalAlpha=0.22; ctx.fillStyle=COL.amber;
+    ctx.beginPath(); ctx.arc(spec.highlight.x,spec.highlight.y,spec.highlight.r,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+  for(const a of spec.atoms){ atomC(ctx,a.x,a.y,a.r,a.color,a.label); }
+  ctx.restore();
+}
+function roundRectPath(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+
+// ===== SVG renderer =====
+function glowStyle(c){ return 'filter:drop-shadow(0 0 2px '+c+') drop-shadow(0 0 5px '+c+');'; }
+function renderSpecSVG(spec){
+  if(spec.condensed){
+    const c = spec.condensed.color, txt = spec.condensed.text;
+    const w = txt.length*8+20;
+    return '<g style="'+glowStyle(c)+'">'+
+      '<rect x="'+(-w/2)+'" y="-15" width="'+w+'" height="30" rx="7" fill="#000" stroke="'+c+'" stroke-width="1.8"/>'+
+      '<text x="0" y="0.5" font-family="monospace" font-size="13" text-anchor="middle" dominant-baseline="middle" fill="'+c+'">'+txt+'</text>'+
+      '<line x1="'+(w/2)+'" y1="0" x2="'+(w/2+10)+'" y2="0" stroke="'+c+'" stroke-width="1.8"/>'+
+      '</g>';
+  }
+  let s='';
+  for(const b of spec.bonds){
+    if(b.kind==='double'){
+      const dx=b.x2-b.x1, dy=b.y2-b.y1, len=Math.hypot(dx,dy);
+      const nx=-dy/len*3, ny=dx/len*3;
+      s+='<line x1="'+(b.x1+nx)+'" y1="'+(b.y1+ny)+'" x2="'+(b.x2+nx)+'" y2="'+(b.y2+ny)+'" stroke="'+b.color+'" stroke-width="2.2" style="'+glowStyle(b.color)+'"/>';
+      s+='<line x1="'+(b.x1-nx)+'" y1="'+(b.y1-ny)+'" x2="'+(b.x2-nx)+'" y2="'+(b.y2-ny)+'" stroke="'+b.color+'" stroke-width="2.2" style="'+glowStyle(b.color)+'"/>';
+    } else if(b.kind==='wedge'){
+      const dx=b.x2-b.x1, dy=b.y2-b.y1, len=Math.hypot(dx,dy);
+      const nx=-dy/len*5, ny=dx/len*5;
+      s+='<polygon points="'+b.x1+','+b.y1+' '+(b.x2+nx)+','+(b.y2+ny)+' '+(b.x2-nx)+','+(b.y2-ny)+'" fill="'+b.color+'" style="'+glowStyle(b.color)+'"/>';
+    } else if(b.kind==='dash'){
+      const steps=5;
+      for(let i=1;i<=steps;i++){
+        const t=i/steps;
+        const px=b.x1+(b.x2-b.x1)*t, py=b.y1+(b.y2-b.y1)*t;
+        const dx=b.x2-b.x1, dy=b.y2-b.y1, len=Math.hypot(dx,dy);
+        const nx=-dy/len, ny=dx/len, w=1+t*4;
+        s+='<line x1="'+(px-nx*w)+'" y1="'+(py-ny*w)+'" x2="'+(px+nx*w)+'" y2="'+(py+ny*w)+'" stroke="'+b.color+'" stroke-width="2" style="'+glowStyle(b.color)+'"/>';
+      }
+    } else {
+      s+='<line x1="'+b.x1+'" y1="'+b.y1+'" x2="'+b.x2+'" y2="'+b.y2+'" stroke="'+b.color+'" stroke-width="2.2" style="'+glowStyle(b.color)+'"/>';
+    }
+  }
+  if(spec.highlight){
+    s+='<circle cx="'+spec.highlight.x+'" cy="'+spec.highlight.y+'" r="'+spec.highlight.r+'" fill="'+COL.amber+'" opacity="0.22"/>';
+  }
+  for(const a of spec.atoms){
+    if(a.r>0){
+      s+='<circle cx="'+a.x+'" cy="'+a.y+'" r="'+a.r+'" fill="#000" stroke="'+a.color+'" stroke-width="1.6" style="'+glowStyle(a.color)+'"/>';
+      s+='<text x="'+a.x+'" y="'+(a.y+0.5)+'" font-size="8.5" text-anchor="middle" dominant-baseline="middle" fill="'+a.color+'">'+a.label+'</text>';
+    } else {
+      s+='<text x="'+a.x+'" y="'+(a.y+0.5)+'" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="'+a.color+'" style="'+glowStyle(a.color)+'">'+a.label+'</text>';
+    }
+  }
+  return s;
+}
+let currentStyle = 'full';
+let acidPos = 170, ethanolPos = 470, Ycenter = 130;
+const SCALE = 1.7; // larger molecules, as requested
+
+function renderMolecules(){
+  document.getElementById('acid-g').innerHTML = renderSpecSVG(getSpec('acid', currentStyle));
+  document.getElementById('ethanol-g').innerHTML = renderSpecSVG(getSpec('ethanol', currentStyle));
+  updateManual();
+}
+
+function setStyle(s){
+  currentStyle = s;
+  document.querySelectorAll('.style-picker label').forEach(function(l){
+    l.classList.toggle('active', l.dataset.style===s);
+  });
+  renderMolecules();
+}
+
+function updateManual(){
+  const aSlider = +document.getElementById('acidSlider').value;
+  const eSlider = +document.getElementById('ethanolSlider').value;
+  document.getElementById('acidVal').textContent = aSlider+'\u00b0';
+  document.getElementById('ethanolVal').textContent = eSlider+'\u00b0';
+  document.getElementById('acid-g').setAttribute('transform', 'translate('+acidPos+','+Ycenter+') rotate('+aSlider+') scale('+SCALE+')');
+  document.getElementById('ethanol-g').setAttribute('transform', 'translate('+ethanolPos+','+Ycenter+') rotate('+(180+eSlider)+') scale('+SCALE+')');
+}
+
+function tween(duration, onUpdate, onDone){
+  const t0 = performance.now();
+  function frame(t){
+    const p = Math.min(1, (t-t0)/duration);
+    onUpdate(p);
+    if(p<1) requestAnimationFrame(frame); else if(onDone) onDone();
+  }
+  requestAnimationFrame(frame);
+}
+
+function showFlash(x,y,color){
+  const svgns='http://www.w3.org/2000/svg';
+  const c = document.createElementNS(svgns,'circle');
+  c.setAttribute('cx',x); c.setAttribute('cy',y); c.setAttribute('r',4);
+  c.setAttribute('fill','none'); c.setAttribute('stroke',color); c.setAttribute('stroke-width',3);
+  c.setAttribute('opacity',0.9);
+  c.setAttribute('style','filter:drop-shadow(0 0 6px '+color+') drop-shadow(0 0 14px '+color+');');
+  document.getElementById('flash-g').appendChild(c);
+  tween(500, function(p){
+    c.setAttribute('r', 4+p*60);
+    c.setAttribute('opacity', 0.9*(1-p));
+  }, function(){ c.remove(); });
+}
+
+function worldPt(cx,cy,thetaDeg,localX,localY){
+  const th = thetaDeg*Math.PI/180;
+  return {
+    x: cx + (localX*Math.cos(th) - localY*Math.sin(th))*SCALE,
+    y: cy + (localX*Math.sin(th) + localY*Math.cos(th))*SCALE
+  };
+}
+
+function showMechanism(aSlider, eSlider, onDone){
+  const acidSpec = getSpec('acid', currentStyle);
+  const ethSpec = getSpec('ethanol', currentStyle);
+  const svgns='http://www.w3.org/2000/svg';
+  const mechG = document.getElementById('mech-g');
+  mechG.innerHTML='';
+  const note = document.getElementById('mechNote');
+
+  if(!acidSpec.reactC || !ethSpec.attackO){
+    // condensed style: no atom-level geometry -- show a simple text-only mechanism note
+    note.textContent = 'The O of ethanol\u2019s \u2013OH attacks the carbonyl carbon of the \u2013COOH group; the acid\u2019s C\u2013OH bond breaks, releasing that oxygen and hydrogen as part of a water molecule while a new C\u2013O ester link forms.';
+    setTimeout(onDone, 1400);
+    return;
+  }
+
+  const oPt = worldPt(ethanolPos, Ycenter, 180+eSlider, ethSpec.attackO.x, ethSpec.attackO.y);
+  const cPt = worldPt(acidPos, Ycenter, aSlider, acidSpec.reactC.x, acidSpec.reactC.y);
+  const leavePt = worldPt(acidPos, Ycenter, aSlider, acidSpec.leaveO.x, acidSpec.leaveO.y);
+
+  const forming = document.createElementNS(svgns,'line');
+  forming.setAttribute('x1',oPt.x); forming.setAttribute('y1',oPt.y);
+  forming.setAttribute('x2',cPt.x); forming.setAttribute('y2',cPt.y);
+  forming.setAttribute('stroke','#eafcff'); forming.setAttribute('stroke-width','2.4');
+  forming.setAttribute('stroke-dasharray','6 5');
+  forming.setAttribute('style','filter:drop-shadow(0 0 6px #eafcff);');
+  mechG.appendChild(forming);
+
+  const breaking = document.createElementNS(svgns,'line');
+  breaking.setAttribute('x1',cPt.x); breaking.setAttribute('y1',cPt.y);
+  breaking.setAttribute('x2',leavePt.x); breaking.setAttribute('y2',leavePt.y);
+  breaking.setAttribute('stroke','#ff3b3b'); breaking.setAttribute('stroke-width','2.4');
+  breaking.setAttribute('stroke-dasharray','4 4');
+  breaking.setAttribute('style','filter:drop-shadow(0 0 6px #ff3b3b);');
+  mechG.appendChild(breaking);
+
+  const lbl1 = document.createElementNS(svgns,'text');
+  lbl1.setAttribute('x', (oPt.x+cPt.x)/2); lbl1.setAttribute('y', (oPt.y+cPt.y)/2-10);
+  lbl1.setAttribute('text-anchor','middle'); lbl1.setAttribute('font-size','10');
+  lbl1.setAttribute('fill','#eafcff'); lbl1.textContent='new C\u2013O bond forming';
+  mechG.appendChild(lbl1);
+
+  const lbl2 = document.createElementNS(svgns,'text');
+  lbl2.setAttribute('x', leavePt.x); lbl2.setAttribute('y', leavePt.y-14);
+  lbl2.setAttribute('text-anchor','middle'); lbl2.setAttribute('font-size','10');
+  lbl2.setAttribute('fill','#ff6b6b'); lbl2.textContent='C\u2013OH bond breaking';
+  mechG.appendChild(lbl2);
+
+  note.textContent = 'The lone pair on ethanol\u2019s oxygen attacks the carbonyl carbon of the \u2013COOH group. The acid\u2019s C\u2013OH bond breaks; that O and an H leave together as water, while the new C\u2013O ester link forms.';
+
+  tween(900, function(p){
+    forming.setAttribute('opacity', 0.4+0.6*Math.abs(Math.sin(p*Math.PI*3)));
+    breaking.setAttribute('opacity', 1-p);
+  }, function(){
+    mechG.innerHTML='';
+    onDone();
+  });
+}
+
+let manualBusy = false;
+function testCollision(){
+  if(manualBusy) return;
+  manualBusy = true;
+  const aSlider = +document.getElementById('acidSlider').value;
+  const eSlider = +document.getElementById('ethanolSlider').value;
+  const okA = Math.abs(aSlider) <= 45;
+  const okE = Math.abs(eSlider) <= 45;
+  const success = okA && okE;
+  const contactA = 250, contactE = 390;
+  const box = document.getElementById('manualResult');
+  box.style.background = '#000'; box.style.borderColor='#333'; box.style.color = '#8be9ff';
+  box.textContent = 'Molecules approaching...';
+  document.getElementById('mechNote').textContent='';
+
+  tween(550, function(p){
+    const e = 1-(1-p)*(1-p);
+    acidPos = 170 + (contactA-170)*e;
+    ethanolPos = 470 + (contactE-470)*e;
+    document.getElementById('acid-g').setAttribute('transform', 'translate('+acidPos+','+Ycenter+') rotate('+aSlider+') scale('+SCALE+')');
+    document.getElementById('ethanol-g').setAttribute('transform', 'translate('+ethanolPos+','+Ycenter+') rotate('+(180+eSlider)+') scale('+SCALE+')');
+  }, function(){
+    if(success){
+      box.textContent = 'Correct orientation \u2014 watch the bond form...';
+      showMechanism(aSlider, eSlider, function(){
+        showFlash((acidPos+ethanolPos)/2, Ycenter, '#39ff6a');
+        const midX = (acidPos+ethanolPos)/2;
+        document.getElementById('acid-g').innerHTML = renderSpecSVG(getSpec('ester', currentStyle));
+        document.getElementById('ethanol-g').innerHTML = renderSpecSVG(getSpec('water', currentStyle));
+        let esterX = midX-20, esterY = Ycenter;
+        let waterX = midX+70, waterY = Ycenter+20;
+        document.getElementById('acid-g').setAttribute('transform','translate('+esterX+','+esterY+') scale('+SCALE+')');
+        document.getElementById('ethanol-g').setAttribute('transform','translate('+waterX+','+waterY+') scale('+SCALE+')');
+        box.style.background='#001a08'; box.style.borderColor='#39ff6a'; box.style.color='#39ff6a';
+        box.textContent = 'Ester link formed: the acid and alcohol are now joined by \u2013COO\u2013, and water has been released.';
+        tween(1800, function(p){
+          const e = p; // drift apart while the result is shown
+          const esX = esterX - 90*e, esY = esterY - 10*e;
+          const wX = waterX + 90*e, wY = waterY + 20*e;
+          document.getElementById('acid-g').setAttribute('transform','translate('+esX+','+esY+') scale('+SCALE+')');
+          document.getElementById('ethanol-g').setAttribute('transform','translate('+wX+','+wY+') scale('+SCALE+')');
+        });
+        setTimeout(function(){
+          tween(400, function(p){
+            document.getElementById('acid-g').style.opacity = 1-p;
+            document.getElementById('ethanol-g').style.opacity = 1-p;
+          }, function(){
+            document.getElementById('acid-g').style.opacity=1;
+            document.getElementById('ethanol-g').style.opacity=1;
+            acidPos=170; ethanolPos=470;
+            renderMolecules();
+            box.textContent=''; box.style.background='#000'; box.style.borderColor='#222';
+            document.getElementById('mechNote').textContent='';
+            manualBusy=false;
+          });
+        }, 2400);
+      });
+    } else {
+      showFlash((acidPos+ethanolPos)/2, Ycenter, '#ff3b3b');
+      box.style.background='#1a0000'; box.style.borderColor='#ff3b3b'; box.style.color='#ff6b6b';
+      box.textContent = 'Wrong orientation: the hydroxyl groups are not lined up. The molecules collide, but simply recoil apart unreacted.';
+      tween(550, function(p){
+        const e = 1-(1-p)*(1-p);
+        acidPos = contactA + (170-contactA)*e;
+        ethanolPos = contactE + (470-contactE)*e;
+        document.getElementById('acid-g').setAttribute('transform', 'translate('+acidPos+','+Ycenter+') rotate('+aSlider+') scale('+SCALE+')');
+        document.getElementById('ethanol-g').setAttribute('transform', 'translate('+ethanolPos+','+Ycenter+') rotate('+(180+eSlider)+') scale('+SCALE+')');
+      }, function(){
+        setTimeout(function(){
+          box.textContent=''; box.style.background='#000'; box.style.borderColor='#222';
+          manualBusy=false;
+        }, 800);
+      });
+    }
+  });
+}
+
+function resetManual(){
+  if(manualBusy) return;
+  document.getElementById('acidSlider').value=0;
+  document.getElementById('ethanolSlider').value=0;
+  acidPos=170; ethanolPos=470;
+  renderMolecules();
+  document.getElementById('acid-g').style.opacity=1;
+  document.getElementById('ethanol-g').style.opacity=1;
+  const box = document.getElementById('manualResult');
+  box.textContent=''; box.style.background='#000'; box.style.borderColor='#222';
+  document.getElementById('mechNote').textContent='';
+}
+
+renderMolecules();
+</script>
+</body>
+</html>

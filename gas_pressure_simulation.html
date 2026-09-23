@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Pressure Simulator — Gas-Phase Reaction</title>
+<style>
+body{background:#050505;color:#eafcff;font-family:-apple-system,'Segoe UI',sans-serif;margin:0;padding:24px;}
+.wrap{max-width:760px;margin:0 auto;}
+h1{font-size:20px;color:#fff;text-shadow:0 0 8px #ff2fd6;margin:0 0 4px;}
+.subtitle{font-size:13px;color:#9aa0ff;margin:0 0 20px;}
+.caption{font-size:13px;color:#7d7dff;margin:0 0 8px;}
+.neon-card{background:#000;border:1px solid #ff2fd6;border-radius:12px;padding:1.1rem 1.3rem;margin-bottom:1.4rem;box-shadow:0 0 14px rgba(255,47,214,0.35);}
+.neon-row{display:flex;align-items:center;gap:12px;margin:10px 0;flex-wrap:wrap;}
+.neon-label{font-size:13px;color:#8be9ff;min-width:150px;text-shadow:0 0 4px rgba(53,224,255,0.5);}
+.neon-btn{background:#000;border:1px solid #35e0ff;color:#35e0ff;border-radius:6px;padding:8px 18px;font-size:13px;cursor:pointer;text-shadow:0 0 4px #35e0ff;box-shadow:0 0 6px rgba(53,224,255,0.35);}
+.neon-btn:hover{box-shadow:0 0 14px rgba(53,224,255,0.8);}
+.neon-metric{background:#000;border:1px solid #35e0ff;border-radius:8px;padding:0.75rem 1rem;text-align:center;box-shadow:0 0 8px rgba(53,224,255,0.25);}
+.neon-metric .num{font-size:22px;font-weight:600;color:#fff;text-shadow:0 0 6px #35e0ff;}
+.neon-metric .lbl{font-size:12px;color:#8be9ff;}
+.neon-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:#c9c9ff;margin-top:12px;}
+.neon-dot{width:10px;height:10px;border-radius:50%;display:inline-block;}
+.neon-result{font-size:13px;padding:10px 14px;border-radius:8px;margin-top:10px;min-height:20px;border:1px solid #222;background:#000;color:#8be9ff;transition:background 0.2s;}
+.neon-val{min-width:44px;text-align:right;font-size:13px;color:#fff;text-shadow:0 0 4px #35e0ff;}
+.style-picker{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;}
+.style-picker label{font-size:12px;color:#8be9ff;background:#000;border:1px solid #35e0ff44;border-radius:20px;padding:6px 12px;cursor:pointer;}
+.style-picker input{accent-color:#35e0ff;margin-right:5px;}
+.style-picker label.active{border-color:#35e0ff;box-shadow:0 0 8px rgba(53,224,255,0.5);}
+input[type=range]{accent-color:#35e0ff;width:100%;}
+input[type=checkbox]{accent-color:#35e0ff;}
+.mech-note{font-size:12px;color:#ffcf7d;margin-top:6px;text-shadow:0 0 4px rgba(255,159,47,0.4);}
+.gauge{background:#111;border:1px solid #444;border-radius:6px;height:10px;overflow:hidden;margin:4px 0 2px 162px;}
+.gauge-fill{height:100%;background:#ff3b3b;transition:width 0.3s, background-color 0.3s;}
+.gauge-label{font-size:11px;color:#ffcf7d;margin:0 0 8px 162px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Pressure — A Gas-Phase Reaction</h1>
+<p class="subtitle">H2(g) + Cl2(g) &rarr; 2HCl(g). Unlike the liquid esterification, pressure genuinely matters here: squeezing a fixed number of gas molecules into a smaller volume raises their concentration directly.</p>
+
+<div class="neon-card">
+  <canvas id="simCanvas" width="640" height="380" style="width:100%;height:auto;display:block;border-radius:8px;"></canvas>
+  <div class="neon-row" style="justify-content:space-between;">
+    <div style="display:flex;gap:10px;">
+      <button class="neon-btn" id="playBtn" onclick="toggleSim()">Start</button>
+      <button class="neon-btn" onclick="resetSim()">Reset</button>
+    </div>
+  </div>
+  <div class="neon-row">
+    <span class="neon-label">Pressure</span>
+    <input type="range" id="pressureSlider" min="1" max="10" value="1" step="1" oninput="onPressureChange()">
+    <span id="pressureVal" class="neon-val">1 atm</span>
+  </div>
+  <p class="caption">The magenta box is the container. Raising pressure compresses it — same number of molecules, smaller volume, higher concentration.</p>
+
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:8px;">
+    <div class="neon-metric"><div class="num" id="statTotal">0</div><div class="lbl">Collisions</div></div>
+    <div class="neon-metric"><div class="num" id="statSuccess">0</div><div class="lbl">HCl formed</div></div>
+    <div class="neon-metric"><div class="num" id="statRatePerSec">0.00</div><div class="lbl">Reactions / second</div></div>
+    <div class="neon-metric"><div class="num" id="statConc">1.00&times;</div><div class="lbl">Relative concentration</div></div>
+  </div>
+  <div class="neon-legend">
+    <span><span class="neon-dot" style="background:#35e0ff;box-shadow:0 0 6px #35e0ff;"></span>H2</span>
+    <span><span class="neon-dot" style="background:#ffe14d;box-shadow:0 0 6px #ffe14d;"></span>Cl2</span>
+    <span><span class="neon-dot" style="background:#8a7dff;box-shadow:0 0 6px #8a7dff;"></span>HCl (product)</span>
+  </div>
+</div>
+
+<p style="font-size:12px;color:#666;">H2 and Cl2 are continuously resupplied here so the reaction reaches a steady state — this keeps the comparison clean: the only thing changing between pressure settings is collision frequency, not how much gas is left. Raise the pressure and watch "reactions/second" climb as the container shrinks.</p>
+
+</div>
+<script>
+// ===== Neon color palette =====
+const COL = {
+  acidC:'#35e0ff', ethC:'#ffe14d', esterC:'#39ff6a', waterO:'#8a7dff',
+  O:'#ff2fd6', H:'#eafcff', amber:'#ff9f2f', bad:'#ff3b3b', good:'#39ff6a'
+};
+
+// ===== Build a drawing "spec" for a molecule in a given structural style =====
+// type: 'acid' | 'ethanol' | 'ester' | 'water'
+// style: 'full' | 'skeletal' | 'condensed' | 'stereo'
+// Local frame convention: the reactive end (the -OH that must collide) points along local +x.
+function getSpec(type, style){
+  if(style==='condensed'){
+    const map = {
+      acid:{text:'CH3COOH', color:COL.acidC},
+      ethanol:{text:'CH3CH2OH', color:COL.ethC},
+      ester:{text:'CH3COOCH2CH3', color:COL.esterC},
+      water:{text:'H2O', color:COL.waterO}
+    };
+    return {condensed:map[type]};
+  }
+  if(type==='water'){
+    // water is drawn the same way regardless of style (no carbon skeleton to simplify)
+    return {
+      bonds:[
+        {x1:0,y1:0,x2:-11,y2:9,kind:'single',color:COL.waterO},
+        {x1:0,y1:0,x2:11,y2:9,kind:'single',color:COL.waterO}
+      ],
+      atoms:[
+        {x:0,y:0,r:9,color:COL.waterO,label:'O'},
+        {x:-11,y:9,r:5,color:COL.H,label:'H'},
+        {x:11,y:9,r:5,color:COL.H,label:'H'}
+      ],
+      highlight:null
+    };
+  }
+
+  const CC = type==='acid'?COL.acidC : type==='ethanol'?COL.ethC : COL.esterC;
+
+  if(style==='skeletal'){
+    if(type==='acid'){
+      return {
+        bonds:[
+          {x1:-40,y1:8,x2:-16,y2:-8,kind:'single',color:CC},
+          {x1:-16,y1:-8,x2:-16,y2:-26,kind:'double',color:CC},
+          {x1:-16,y1:-8,x2:8,y2:8,kind:'single',color:CC}
+        ],
+        atoms:[
+          {x:-16,y:-26,r:0,color:COL.O,label:'O'},
+          {x:8,y:8,r:0,color:COL.O,label:'O'},
+          {x:26,y:8,r:0,color:COL.H,label:'H'}
+        ],
+        highlight:{x:17,y:8,r:15},
+        reactC:{x:-16,y:-8}, leaveO:{x:8,y:8}
+      };
+    }
+    if(type==='ethanol'){
+      return {
+        bonds:[
+          {x1:-37,y1:8,x2:-13,y2:-8,kind:'single',color:CC},
+          {x1:-13,y1:-8,x2:10,y2:8,kind:'single',color:CC}
+        ],
+        atoms:[
+          {x:10,y:8,r:0,color:COL.O,label:'O'},
+          {x:28,y:8,r:0,color:COL.H,label:'H'}
+        ],
+        highlight:{x:19,y:8,r:15},
+        attackO:{x:10,y:8}
+      };
+    }
+    // ester skeletal
+    return {
+      bonds:[
+        {x1:-55,y1:8,x2:-31,y2:-8,kind:'single',color:CC},
+        {x1:-31,y1:-8,x2:-31,y2:-26,kind:'double',color:CC},
+        {x1:-31,y1:-8,x2:-6,y2:8,kind:'single',color:CC},
+        {x1:-6,y1:8,x2:17,y2:-8,kind:'single',color:CC},
+        {x1:17,y1:-8,x2:39,y2:8,kind:'single',color:CC}
+      ],
+      atoms:[
+        {x:-31,y:-26,r:0,color:COL.O,label:'O'},
+        {x:-6,y:8,r:0,color:COL.O,label:'O'}
+      ],
+      highlight:null
+    };
+  }
+
+  if(style==='stereo'){
+    // Real geometry: sp3 carbons drawn as zigzag with wedge/dash H's (tetrahedral,
+    // ~109.5 deg implied), sp2 carbonyl carbon drawn fully flat/planar (~120 deg,
+    // all plain bonds -- no wedge/dash, since it has no front/back ambiguity),
+    // and the ether/hydroxyl oxygen bonds bent rather than colinear (~105 deg).
+    if(type==='acid'){
+      return {
+        bonds:[
+          {x1:-46,y1:10,x2:-46,y2:26,kind:'wedge',color:CC},
+          {x1:-46,y1:10,x2:-60,y2:2,kind:'dash',color:CC},
+          {x1:-46,y1:10,x2:-34,y2:24,kind:'single',color:CC},
+          {x1:-46,y1:10,x2:-20,y2:-10,kind:'single',color:CC},
+          {x1:-20,y1:-10,x2:-20,y2:-30,kind:'double',color:CC},
+          {x1:-20,y1:-10,x2:4,y2:-2,kind:'single',color:CC},
+          {x1:4,y1:-2,x2:26,y2:10,kind:'single',color:COL.O}
+        ],
+        atoms:[
+          {x:-46,y:10,r:7,color:CC,label:'C'},
+          {x:-46,y:26,r:5,color:COL.H,label:'H'},
+          {x:-60,y:2,r:5,color:COL.H,label:'H'},
+          {x:-34,y:24,r:5,color:COL.H,label:'H'},
+          {x:-20,y:-10,r:7,color:CC,label:'C'},
+          {x:-20,y:-30,r:7,color:COL.O,label:'O'},
+          {x:4,y:-2,r:7,color:COL.O,label:'O'},
+          {x:26,y:10,r:5,color:COL.H,label:'H'}
+        ],
+        highlight:{x:15,y:4,r:15},
+        reactC:{x:-20,y:-10}, leaveO:{x:4,y:-2}
+      };
+    }
+    if(type==='ethanol'){
+      return {
+        bonds:[
+          {x1:-46,y1:10,x2:-46,y2:26,kind:'wedge',color:CC},
+          {x1:-46,y1:10,x2:-60,y2:2,kind:'dash',color:CC},
+          {x1:-46,y1:10,x2:-34,y2:24,kind:'single',color:CC},
+          {x1:-46,y1:10,x2:-20,y2:-10,kind:'single',color:CC},
+          {x1:-20,y1:-10,x2:-30,y2:-26,kind:'wedge',color:CC},
+          {x1:-20,y1:-10,x2:-10,y2:-27,kind:'dash',color:CC},
+          {x1:-20,y1:-10,x2:2,y2:8,kind:'single',color:COL.O},
+          {x1:2,y1:8,x2:24,y2:2,kind:'single',color:COL.O}
+        ],
+        atoms:[
+          {x:-46,y:10,r:7,color:CC,label:'C'},
+          {x:-46,y:26,r:5,color:COL.H,label:'H'},
+          {x:-60,y:2,r:5,color:COL.H,label:'H'},
+          {x:-34,y:24,r:5,color:COL.H,label:'H'},
+          {x:-20,y:-10,r:7,color:CC,label:'C'},
+          {x:-30,y:-26,r:5,color:COL.H,label:'H'},
+          {x:-10,y:-27,r:5,color:COL.H,label:'H'},
+          {x:2,y:8,r:7,color:COL.O,label:'O'},
+          {x:24,y:2,r:5,color:COL.H,label:'H'}
+        ],
+        highlight:{x:13,y:5,r:15},
+        attackO:{x:2,y:8}
+      };
+    }
+    // ester stereo
+    return {
+      bonds:[
+        {x1:-70,y1:10,x2:-70,y2:26,kind:'wedge',color:CC},
+        {x1:-70,y1:10,x2:-84,y2:2,kind:'dash',color:CC},
+        {x1:-70,y1:10,x2:-58,y2:24,kind:'single',color:CC},
+        {x1:-70,y1:10,x2:-44,y2:-10,kind:'single',color:CC},
+        {x1:-44,y1:-10,x2:-44,y2:-30,kind:'double',color:CC},
+        {x1:-44,y1:-10,x2:-20,y2:-2,kind:'single',color:CC},
+        {x1:-20,y1:-2,x2:2,y2:-16,kind:'single',color:COL.O},
+        {x1:2,y1:-16,x2:2,y2:-32,kind:'wedge',color:CC},
+        {x1:2,y1:-16,x2:18,y2:-32,kind:'dash',color:CC},
+        {x1:2,y1:-16,x2:26,y2:2,kind:'single',color:CC},
+        {x1:26,y1:2,x2:26,y2:18,kind:'wedge',color:CC},
+        {x1:26,y1:2,x2:40,y2:-6,kind:'dash',color:CC},
+        {x1:26,y1:2,x2:40,y2:18,kind:'single',color:CC}
+      ],
+      atoms:[
+        {x:-70,y:10,r:7,color:CC,label:'C'},
+        {x:-70,y:26,r:5,color:COL.H,label:'H'},
+        {x:-84,y:2,r:5,color:COL.H,label:'H'},
+        {x:-58,y:24,r:5,color:COL.H,label:'H'},
+        {x:-44,y:-10,r:7,color:CC,label:'C'},
+        {x:-44,y:-30,r:7,color:COL.O,label:'O'},
+        {x:-20,y:-2,r:7,color:COL.O,label:'O'},
+        {x:2,y:-16,r:7,color:CC,label:'C'},
+        {x:2,y:-32,r:5,color:COL.H,label:'H'},
+        {x:18,y:-32,r:5,color:COL.H,label:'H'},
+        {x:26,y:2,r:7,color:CC,label:'C'},
+        {x:26,y:18,r:5,color:COL.H,label:'H'},
+        {x:40,y:-6,r:5,color:COL.H,label:'H'},
+        {x:40,y:18,r:5,color:COL.H,label:'H'}
+      ],
+      highlight:null
+    };
+  }
+
+  // ---- FULL structural ----
+  let spec;
+  if(type==='acid'){
+    spec = {
+      bonds:[
+        {id:'c1ha',x1:-40,y1:0,x2:-40,y2:-16,kind:'single',color:CC},
+        {id:'c1hb',x1:-40,y1:0,x2:-40,y2:16,kind:'single',color:CC},
+        {id:'c1hc',x1:-40,y1:0,x2:-58,y2:0,kind:'single',color:CC},
+        {x1:-40,y1:0,x2:-16,y2:0,kind:'single',color:CC},
+        {x1:-16,y1:0,x2:-16,y2:-20,kind:'double',color:CC},
+        {x1:-16,y1:0,x2:8,y2:0,kind:'single',color:CC},
+        {x1:8,y1:0,x2:26,y2:0,kind:'single',color:COL.O}
+      ],
+      atoms:[
+        {x:-40,y:0,r:8,color:CC,label:'C'},
+        {x:-40,y:-16,r:5,color:COL.H,label:'H'},
+        {x:-40,y:16,r:5,color:COL.H,label:'H'},
+        {x:-58,y:0,r:5,color:COL.H,label:'H'},
+        {x:-16,y:0,r:8,color:CC,label:'C'},
+        {x:-16,y:-20,r:8,color:COL.O,label:'O'},
+        {x:8,y:0,r:8,color:COL.O,label:'O'},
+        {x:26,y:0,r:5,color:COL.H,label:'H'}
+      ],
+      highlight:{x:17,y:0,r:15},
+      reactC:{x:-16,y:0}, leaveO:{x:8,y:0}
+    };
+  } else if(type==='ethanol'){
+    spec = {
+      bonds:[
+        {id:'c1ha',x1:-37,y1:0,x2:-37,y2:-16,kind:'single',color:CC},
+        {id:'c1hb',x1:-37,y1:0,x2:-37,y2:16,kind:'single',color:CC},
+        {x1:-37,y1:0,x2:-55,y2:0,kind:'single',color:CC},
+        {x1:-37,y1:0,x2:-13,y2:0,kind:'single',color:CC},
+        {id:'c2ha',x1:-13,y1:0,x2:-13,y2:-16,kind:'single',color:CC},
+        {id:'c2hb',x1:-13,y1:0,x2:-13,y2:16,kind:'single',color:CC},
+        {x1:-13,y1:0,x2:10,y2:0,kind:'single',color:COL.O},
+        {x1:10,y1:0,x2:28,y2:0,kind:'single',color:COL.O}
+      ],
+      atoms:[
+        {x:-37,y:0,r:8,color:CC,label:'C'},
+        {x:-37,y:-16,r:5,color:COL.H,label:'H'},
+        {x:-37,y:16,r:5,color:COL.H,label:'H'},
+        {x:-55,y:0,r:5,color:COL.H,label:'H'},
+        {x:-13,y:0,r:8,color:CC,label:'C'},
+        {x:-13,y:-16,r:5,color:COL.H,label:'H'},
+        {x:-13,y:16,r:5,color:COL.H,label:'H'},
+        {x:10,y:0,r:8,color:COL.O,label:'O'},
+        {x:28,y:0,r:5,color:COL.H,label:'H'}
+      ],
+      highlight:{x:19,y:0,r:15},
+      attackO:{x:10,y:0}
+    };
+  } else { // ester
+    spec = {
+      bonds:[
+        {x1:-55,y1:0,x2:-55,y2:-16,kind:'single',color:CC},
+        {x1:-55,y1:0,x2:-55,y2:16,kind:'single',color:CC},
+        {x1:-55,y1:0,x2:-73,y2:0,kind:'single',color:CC},
+        {x1:-55,y1:0,x2:-31,y2:0,kind:'single',color:CC},
+        {x1:-31,y1:0,x2:-31,y2:-20,kind:'double',color:CC},
+        {x1:-31,y1:0,x2:-6,y2:0,kind:'single',color:COL.O},
+        {x1:-6,y1:0,x2:17,y2:0,kind:'single',color:COL.O},
+        {id:'c3ha',x1:17,y1:0,x2:17,y2:-16,kind:'single',color:CC},
+        {id:'c3hb',x1:17,y1:0,x2:17,y2:16,kind:'single',color:CC},
+        {x1:17,y1:0,x2:39,y2:0,kind:'single',color:CC},
+        {x1:39,y1:0,x2:39,y2:-16,kind:'single',color:CC},
+        {x1:39,y1:0,x2:39,y2:16,kind:'single',color:CC},
+        {x1:39,y1:0,x2:57,y2:0,kind:'single',color:CC}
+      ],
+      atoms:[
+        {x:-55,y:0,r:8,color:CC,label:'C'},
+        {x:-55,y:-16,r:5,color:COL.H,label:'H'},
+        {x:-55,y:16,r:5,color:COL.H,label:'H'},
+        {x:-73,y:0,r:5,color:COL.H,label:'H'},
+        {x:-31,y:0,r:8,color:CC,label:'C'},
+        {x:-31,y:-20,r:8,color:COL.O,label:'O'},
+        {x:-6,y:0,r:8,color:COL.O,label:'O'},
+        {x:17,y:0,r:8,color:CC,label:'C'},
+        {x:17,y:-16,r:5,color:COL.H,label:'H'},
+        {x:17,y:16,r:5,color:COL.H,label:'H'},
+        {x:39,y:0,r:8,color:CC,label:'C'},
+        {x:39,y:-16,r:5,color:COL.H,label:'H'},
+        {x:39,y:16,r:5,color:COL.H,label:'H'},
+        {x:57,y:0,r:5,color:COL.H,label:'H'}
+      ],
+      highlight:null
+    };
+  }
+
+  return spec;
+}
+
+// ===== Canvas renderer =====
+function neonLineC(c,x1,y1,x2,y2,color,w){
+  c.save(); c.shadowColor=color; c.shadowBlur=8;
+  c.strokeStyle=color; c.lineWidth=w||2.2;
+  c.beginPath(); c.moveTo(x1,y1); c.lineTo(x2,y2); c.stroke();
+  c.restore();
+}
+function wedgeC(c,x1,y1,x2,y2,color){
+  const dx=x2-x1, dy=y2-y1, len=Math.hypot(dx,dy);
+  const nx=-dy/len, ny=dx/len, w=5;
+  c.save(); c.shadowColor=color; c.shadowBlur=8;
+  c.fillStyle=color;
+  c.beginPath();
+  c.moveTo(x1,y1);
+  c.lineTo(x2+nx*w, y2+ny*w);
+  c.lineTo(x2-nx*w, y2-ny*w);
+  c.closePath(); c.fill();
+  c.restore();
+}
+function dashC(c,x1,y1,x2,y2,color){
+  const steps=5;
+  c.save(); c.shadowColor=color; c.shadowBlur=8; c.strokeStyle=color; c.lineWidth=2;
+  for(let i=1;i<=steps;i++){
+    const t=i/steps;
+    const px=x1+(x2-x1)*t, py=y1+(y2-y1)*t;
+    const dx=x2-x1, dy=y2-y1, len=Math.hypot(dx,dy);
+    const nx=-dy/len, ny=dx/len, w=1+t*4;
+    c.beginPath(); c.moveTo(px-nx*w,py-ny*w); c.lineTo(px+nx*w,py+ny*w); c.stroke();
+  }
+  c.restore();
+}
+function atomC(c,x,y,r,color,label){
+  c.save();
+  if(r>0){
+    c.shadowColor=color; c.shadowBlur=9;
+    c.beginPath(); c.arc(x,y,r,0,Math.PI*2);
+    c.fillStyle='#000'; c.fill();
+    c.lineWidth=1.6; c.strokeStyle=color; c.stroke();
+    c.shadowBlur=0;
+  } else {
+    c.shadowColor=color; c.shadowBlur=6;
+  }
+  c.fillStyle=color;
+  c.font=(r>0?'8.5px':'10px')+' sans-serif';
+  c.textAlign='center'; c.textBaseline='middle';
+  c.fillText(label,x,y+0.5);
+  c.restore();
+}
+function renderSpecCanvas(ctx, spec, scale){
+  scale = scale||1;
+  ctx.save();
+  ctx.scale(scale,scale);
+  if(spec.condensed){
+    const pad=10, txt=spec.condensed.text, color=spec.condensed.color;
+    ctx.font='13px monospace';
+    const w = ctx.measureText(txt).width;
+    ctx.save(); ctx.shadowColor=color; ctx.shadowBlur=8;
+    ctx.strokeStyle=color; ctx.lineWidth=1.8;
+    roundRectPath(ctx,-w/2-pad,-14,w+pad*2,28,7); ctx.stroke();
+    ctx.fillStyle=color; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(txt,0,0.5);
+    // reactive-end tick
+    ctx.beginPath(); ctx.moveTo(w/2+pad,0); ctx.lineTo(w/2+pad+10,0); ctx.stroke();
+    ctx.restore();
+    ctx.restore();
+    return;
+  }
+  for(const b of spec.bonds){
+    if(b.kind==='double'){
+      const dx=b.x2-b.x1, dy=b.y2-b.y1, len=Math.hypot(dx,dy);
+      const nx=-dy/len*3, ny=dx/len*3;
+      neonLineC(ctx,b.x1+nx,b.y1+ny,b.x2+nx,b.y2+ny,b.color);
+      neonLineC(ctx,b.x1-nx,b.y1-ny,b.x2-nx,b.y2-ny,b.color);
+    } else if(b.kind==='wedge'){ wedgeC(ctx,b.x1,b.y1,b.x2,b.y2,b.color); }
+    else if(b.kind==='dash'){ dashC(ctx,b.x1,b.y1,b.x2,b.y2,b.color); }
+    else { neonLineC(ctx,b.x1,b.y1,b.x2,b.y2,b.color); }
+  }
+  if(spec.highlight){
+    ctx.save(); ctx.globalAlpha=0.22; ctx.fillStyle=COL.amber;
+    ctx.beginPath(); ctx.arc(spec.highlight.x,spec.highlight.y,spec.highlight.r,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+  for(const a of spec.atoms){ atomC(ctx,a.x,a.y,a.r,a.color,a.label); }
+  ctx.restore();
+}
+function roundRectPath(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+
+// ===== SVG renderer =====
+function glowStyle(c){ return 'filter:drop-shadow(0 0 2px '+c+') drop-shadow(0 0 5px '+c+');'; }
+function renderSpecSVG(spec){
+  if(spec.condensed){
+    const c = spec.condensed.color, txt = spec.condensed.text;
+    const w = txt.length*8+20;
+    return '<g style="'+glowStyle(c)+'">'+
+      '<rect x="'+(-w/2)+'" y="-15" width="'+w+'" height="30" rx="7" fill="#000" stroke="'+c+'" stroke-width="1.8"/>'+
+      '<text x="0" y="0.5" font-family="monospace" font-size="13" text-anchor="middle" dominant-baseline="middle" fill="'+c+'">'+txt+'</text>'+
+      '<line x1="'+(w/2)+'" y1="0" x2="'+(w/2+10)+'" y2="0" stroke="'+c+'" stroke-width="1.8"/>'+
+      '</g>';
+  }
+  let s='';
+  for(const b of spec.bonds){
+    if(b.kind==='double'){
+      const dx=b.x2-b.x1, dy=b.y2-b.y1, len=Math.hypot(dx,dy);
+      const nx=-dy/len*3, ny=dx/len*3;
+      s+='<line x1="'+(b.x1+nx)+'" y1="'+(b.y1+ny)+'" x2="'+(b.x2+nx)+'" y2="'+(b.y2+ny)+'" stroke="'+b.color+'" stroke-width="2.2" style="'+glowStyle(b.color)+'"/>';
+      s+='<line x1="'+(b.x1-nx)+'" y1="'+(b.y1-ny)+'" x2="'+(b.x2-nx)+'" y2="'+(b.y2-ny)+'" stroke="'+b.color+'" stroke-width="2.2" style="'+glowStyle(b.color)+'"/>';
+    } else if(b.kind==='wedge'){
+      const dx=b.x2-b.x1, dy=b.y2-b.y1, len=Math.hypot(dx,dy);
+      const nx=-dy/len*5, ny=dx/len*5;
+      s+='<polygon points="'+b.x1+','+b.y1+' '+(b.x2+nx)+','+(b.y2+ny)+' '+(b.x2-nx)+','+(b.y2-ny)+'" fill="'+b.color+'" style="'+glowStyle(b.color)+'"/>';
+    } else if(b.kind==='dash'){
+      const steps=5;
+      for(let i=1;i<=steps;i++){
+        const t=i/steps;
+        const px=b.x1+(b.x2-b.x1)*t, py=b.y1+(b.y2-b.y1)*t;
+        const dx=b.x2-b.x1, dy=b.y2-b.y1, len=Math.hypot(dx,dy);
+        const nx=-dy/len, ny=dx/len, w=1+t*4;
+        s+='<line x1="'+(px-nx*w)+'" y1="'+(py-ny*w)+'" x2="'+(px+nx*w)+'" y2="'+(py+ny*w)+'" stroke="'+b.color+'" stroke-width="2" style="'+glowStyle(b.color)+'"/>';
+      }
+    } else {
+      s+='<line x1="'+b.x1+'" y1="'+b.y1+'" x2="'+b.x2+'" y2="'+b.y2+'" stroke="'+b.color+'" stroke-width="2.2" style="'+glowStyle(b.color)+'"/>';
+    }
+  }
+  if(spec.highlight){
+    s+='<circle cx="'+spec.highlight.x+'" cy="'+spec.highlight.y+'" r="'+spec.highlight.r+'" fill="'+COL.amber+'" opacity="0.22"/>';
+  }
+  for(const a of spec.atoms){
+    if(a.r>0){
+      s+='<circle cx="'+a.x+'" cy="'+a.y+'" r="'+a.r+'" fill="#000" stroke="'+a.color+'" stroke-width="1.6" style="'+glowStyle(a.color)+'"/>';
+      s+='<text x="'+a.x+'" y="'+(a.y+0.5)+'" font-size="8.5" text-anchor="middle" dominant-baseline="middle" fill="'+a.color+'">'+a.label+'</text>';
+    } else {
+      s+='<text x="'+a.x+'" y="'+(a.y+0.5)+'" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="'+a.color+'" style="'+glowStyle(a.color)+'">'+a.label+'</text>';
+    }
+  }
+  return s;
+}
+// ===== Structural formulas for the gas-phase pressure simulation =====
+const H2_COLOR = '#35e0ff', CL2_COLOR = '#ffe14d', HCL_PROD_COLOR = '#8a7dff';
+
+function specH2(){
+  return {
+    bonds:[ {x1:-13,y1:0,x2:13,y2:0,kind:'single',color:H2_COLOR} ],
+    atoms:[
+      {x:-13,y:0,r:9,color:H2_COLOR,label:'H'},
+      {x:13,y:0,r:9,color:H2_COLOR,label:'H'}
+    ],
+    highlight:null
+  };
+}
+function specCl2(){
+  return {
+    bonds:[ {x1:-16,y1:0,x2:16,y2:0,kind:'single',color:CL2_COLOR} ],
+    atoms:[
+      {x:-16,y:0,r:11,color:CL2_COLOR,label:'Cl'},
+      {x:16,y:0,r:11,color:CL2_COLOR,label:'Cl'}
+    ],
+    highlight:null
+  };
+}
+function specHClProduct(){
+  return {
+    bonds:[ {x1:-14,y1:0,x2:14,y2:0,kind:'single',color:HCL_PROD_COLOR} ],
+    atoms:[
+      {x:-14,y:0,r:8,color:COL.H,label:'H'},
+      {x:14,y:0,r:10,color:HCL_PROD_COLOR,label:'Cl'}
+    ],
+    highlight:null
+  };
+}
+const canvas = document.getElementById('simCanvas');
+const ctx = canvas.getContext('2d');
+const FULL_W = 640, FULL_H = 380;
+let W = FULL_W, H = FULL_H;
+let particles = [];
+let running = false;
+let animId = null;
+let lastT = null;
+const R = 22;
+const ACT_SPEED = 40;
+const N_EACH = 9;
+let stats = {total:0, success:0, startTime:0};
+let flashes = [];
+
+function rnd(a,b){ return a+Math.random()*(b-a); }
+
+function makeParticle(type){
+  return {
+    type:type,
+    x: rnd(R, W-R), y: rnd(R, H-R),
+    vx: rnd(-60,60), vy: rnd(-60,60),
+    theta: rnd(0,Math.PI*2), omega: rnd(-1,1),
+    r:R, born:performance.now(), cooldown:0
+  };
+}
+
+function initSim(){
+  particles = [];
+  for(let i=0;i<N_EACH;i++){ particles.push(makeParticle('h2')); particles.push(makeParticle('cl2')); }
+  stats = {total:0, success:0, startTime:performance.now()};
+  flashes = [];
+  updateStats();
+}
+
+function updateStats(){
+  document.getElementById('statTotal').textContent = stats.total;
+  document.getElementById('statSuccess').textContent = stats.success;
+  const elapsed = (performance.now()-stats.startTime)/1000;
+  document.getElementById('statRatePerSec').textContent = elapsed>0.5 ? (stats.success/elapsed).toFixed(2) : '0.00';
+  const ratio = (FULL_W*FULL_H)/(W*H);
+  document.getElementById('statConc').textContent = ratio.toFixed(2)+'\u00d7';
+}
+
+function onPressureChange(){
+  const v = +document.getElementById('pressureSlider').value;
+  document.getElementById('pressureVal').textContent = v + ' atm';
+  const newScale = 1 - (v-1)/11.5;
+  const clamped = Math.max(0.28, Math.min(1, newScale));
+  W = FULL_W*clamped; H = FULL_H*clamped;
+  for(const p of particles){
+    p.x = Math.min(p.x, W-p.r); p.y = Math.min(p.y, H-p.r);
+  }
+  updateStats();
+}
+
+function showFlash(x,y,color){
+  flashes.push({x:x,y:y,born:performance.now(),color:color});
+}
+
+function reactAt(x,y){
+  particles.push({type:'hcl', x:x-12, y:y, vx:rnd(-25,25), vy:rnd(-25,25), r:16, born:performance.now(), theta:rnd(0,Math.PI*2)});
+  particles.push({type:'hcl', x:x+12, y:y, vx:rnd(-25,25), vy:rnd(-25,25), r:16, born:performance.now(), theta:rnd(0,Math.PI*2)});
+  showFlash(x,y,'#39ff6a');
+  // steady state: immediately resupply one H2 and one Cl2 elsewhere in the container
+  particles.push(makeParticle('h2'));
+  particles.push(makeParticle('cl2'));
+}
+
+function specFor(type){
+  if(type==='h2') return specH2();
+  if(type==='cl2') return specCl2();
+  return specHClProduct();
+}
+
+function draw(){
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,FULL_W,FULL_H);
+  ctx.save();
+  ctx.strokeStyle='rgba(255,47,214,0.08)'; ctx.lineWidth=1;
+  for(let x=0;x<=FULL_W;x+=40){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,FULL_H); ctx.stroke(); }
+  for(let y=0;y<=FULL_H;y+=40){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(FULL_W,y); ctx.stroke(); }
+  ctx.restore();
+
+  // the piston/container boundary -- this is what "pressure" physically compresses
+  ctx.save();
+  ctx.strokeStyle='#ff2fd6'; ctx.shadowColor='#ff2fd6'; ctx.shadowBlur=10; ctx.lineWidth=2.5;
+  ctx.strokeRect(1,1,W-2,H-2);
+  ctx.restore();
+
+  const now = performance.now();
+  for(const p of particles){
+    ctx.save();
+    ctx.translate(p.x,p.y);
+    if(p.type==='hcl'){
+      const age = now-p.born;
+      ctx.globalAlpha = age>1400 ? Math.max(0,1-(age-1400)/500) : 1;
+    }
+    ctx.rotate(p.theta||0);
+    renderSpecCanvas(ctx, specFor(p.type));
+    ctx.restore();
+  }
+
+  flashes = flashes.filter(function(f){ return now-f.born<450; });
+  for(const f of flashes){
+    const p=(now-f.born)/450;
+    ctx.save();
+    ctx.strokeStyle=f.color; ctx.shadowColor=f.color; ctx.shadowBlur=10;
+    ctx.globalAlpha=1-p; ctx.lineWidth=2.4;
+    ctx.beginPath(); ctx.arc(f.x,f.y,4+p*40,0,Math.PI*2); ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function step(t){
+  if(!lastT) lastT=t;
+  const dt = Math.min((t-lastT)/1000,0.05);
+  lastT=t;
+
+  for(const p of particles){
+    if(p.type==='h2'||p.type==='cl2'){
+      p.x+=p.vx*dt; p.y+=p.vy*dt; p.theta+=p.omega*dt;
+      if(p.x<p.r){p.x=p.r;p.vx*=-1;} if(p.x>W-p.r){p.x=W-p.r;p.vx*=-1;}
+      if(p.y<p.r){p.y=p.r;p.vy*=-1;} if(p.y>H-p.r){p.y=H-p.r;p.vy*=-1;}
+      if(p.cooldown>0) p.cooldown-=dt;
+    } else {
+      p.x+=p.vx*dt; p.y+=p.vy*dt; p.vx*=0.985; p.vy*=0.985;
+      if(p.x<p.r) p.x=p.r; if(p.x>W-p.r) p.x=W-p.r;
+      if(p.y<p.r) p.y=p.r; if(p.y>H-p.r) p.y=H-p.r;
+    }
+  }
+
+  for(let i=0;i<particles.length;i++){
+    const A = particles[i];
+    if(A.type!=='h2' || A.cooldown>0 || A.dead) continue;
+    for(let j=0;j<particles.length;j++){
+      const B = particles[j];
+      if(B.type!=='cl2' || B.cooldown>0 || B.dead) continue;
+      const dx=B.x-A.x, dy=B.y-A.y, dist=Math.hypot(dx,dy);
+      if(dist < A.r+B.r-6 && dist>0.01){
+        const nx=dx/dist, ny=dy/dist;
+        const rel = (B.vx-A.vx)*nx + (B.vy-A.vy)*ny;
+        stats.total++;
+        if(Math.abs(rel) >= ACT_SPEED){
+          stats.success++;
+          reactAt((A.x+B.x)/2,(A.y+B.y)/2);
+          A.dead=true; B.dead=true;
+        } else {
+          if(rel<0){ A.vx+=rel*nx; A.vy+=rel*ny; B.vx-=rel*nx; B.vy-=rel*ny; }
+          const overlap=(A.r+B.r-6)-dist;
+          A.x-=nx*overlap/2; A.y-=ny*overlap/2; B.x+=nx*overlap/2; B.y+=ny*overlap/2;
+          A.cooldown=0.3; B.cooldown=0.3;
+        }
+        updateStats();
+        break;
+      }
+    }
+  }
+
+  particles = particles.filter(function(p){ return !p.dead; });
+  const now = performance.now();
+  particles = particles.filter(function(p){ return !(p.type==='hcl' && now-p.born>1900); });
+
+  draw();
+  if(running) animId = requestAnimationFrame(step);
+}
+
+function toggleSim(){
+  running=!running;
+  document.getElementById('playBtn').textContent = running?'Pause':'Start';
+  if(running){ lastT=null; animId=requestAnimationFrame(step); }
+  else if(animId) cancelAnimationFrame(animId);
+}
+function resetSim(){
+  running=false;
+  document.getElementById('playBtn').textContent='Start';
+  if(animId) cancelAnimationFrame(animId);
+  initSim();
+  draw();
+}
+
+initSim();
+draw();
+</script>
+</body>
+</html>

@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Surface Area Simulator — CaCO3 + HCl</title>
+<style>
+body{background:#050505;color:#eafcff;font-family:-apple-system,'Segoe UI',sans-serif;margin:0;padding:24px;}
+.wrap{max-width:760px;margin:0 auto;}
+h1{font-size:20px;color:#fff;text-shadow:0 0 8px #ff2fd6;margin:0 0 4px;}
+.subtitle{font-size:13px;color:#9aa0ff;margin:0 0 20px;}
+.caption{font-size:13px;color:#7d7dff;margin:0 0 8px;}
+.neon-card{background:#000;border:1px solid #ff2fd6;border-radius:12px;padding:1.1rem 1.3rem;margin-bottom:1.4rem;box-shadow:0 0 14px rgba(255,47,214,0.35);}
+.neon-row{display:flex;align-items:center;gap:12px;margin:10px 0;flex-wrap:wrap;}
+.neon-label{font-size:13px;color:#8be9ff;min-width:150px;text-shadow:0 0 4px rgba(53,224,255,0.5);}
+.neon-btn{background:#000;border:1px solid #35e0ff;color:#35e0ff;border-radius:6px;padding:8px 18px;font-size:13px;cursor:pointer;text-shadow:0 0 4px #35e0ff;box-shadow:0 0 6px rgba(53,224,255,0.35);}
+.neon-btn:hover{box-shadow:0 0 14px rgba(53,224,255,0.8);}
+.neon-metric{background:#000;border:1px solid #35e0ff;border-radius:8px;padding:0.75rem 1rem;text-align:center;box-shadow:0 0 8px rgba(53,224,255,0.25);}
+.neon-metric .num{font-size:22px;font-weight:600;color:#fff;text-shadow:0 0 6px #35e0ff;}
+.neon-metric .lbl{font-size:12px;color:#8be9ff;}
+.neon-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:#c9c9ff;margin-top:12px;}
+.neon-dot{width:10px;height:10px;border-radius:50%;display:inline-block;}
+.neon-result{font-size:13px;padding:10px 14px;border-radius:8px;margin-top:10px;min-height:20px;border:1px solid #222;background:#000;color:#8be9ff;transition:background 0.2s;}
+.neon-val{min-width:44px;text-align:right;font-size:13px;color:#fff;text-shadow:0 0 4px #35e0ff;}
+.style-picker{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;}
+.style-picker label{font-size:12px;color:#8be9ff;background:#000;border:1px solid #35e0ff44;border-radius:20px;padding:6px 12px;cursor:pointer;}
+.style-picker input{accent-color:#35e0ff;margin-right:5px;}
+.style-picker label.active{border-color:#35e0ff;box-shadow:0 0 8px rgba(53,224,255,0.5);}
+input[type=range]{accent-color:#35e0ff;width:100%;}
+input[type=checkbox]{accent-color:#35e0ff;}
+.mech-note{font-size:12px;color:#ffcf7d;margin-top:6px;text-shadow:0 0 4px rgba(255,159,47,0.4);}
+.gauge{background:#111;border:1px solid #444;border-radius:6px;height:10px;overflow:hidden;margin:4px 0 2px 162px;}
+.gauge-fill{height:100%;background:#ff3b3b;transition:width 0.3s, background-color 0.3s;}
+.gauge-label{font-size:11px;color:#ffcf7d;margin:0 0 8px 162px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Surface Area — Calcium Carbonate + Hydrochloric Acid</h1>
+<p class="subtitle">CaCO3(s) + 2HCl(aq) &rarr; CaCl2(aq) + H2O(l) + CO2(g). A different reaction from the esterification simulations — a classic solid + liquid example, since surface area only matters when one reactant is a solid. HCl is in large excess here, so its concentration stays effectively constant.</p>
+
+<div class="neon-card">
+  <canvas id="simCanvas" width="640" height="560" style="width:100%;height:auto;display:block;border-radius:8px;"></canvas>
+  <div class="neon-row" style="justify-content:space-between;">
+    <div style="display:flex;gap:10px;">
+      <button class="neon-btn" id="playBtn" onclick="toggleSim()">Start</button>
+      <button class="neon-btn" onclick="resetSim()">Reset</button>
+    </div>
+  </div>
+
+  <div class="neon-row">
+    <span class="neon-label">Number of CaCO3 pieces</span>
+    <input type="range" id="piecesSlider" min="1" max="16" value="1" step="1" oninput="onPiecesChange()">
+    <span id="piecesVal" class="neon-val">1</span>
+  </div>
+  <div class="neon-row">
+    <span class="neon-label">[HCl]</span>
+    <input type="range" id="hclSlider" min="10" max="40" value="24" step="2" oninput="onHclChange()">
+    <span id="hclVal" class="neon-val">24</span>
+  </div>
+  <p class="caption">The small panel in the top-left always shows the <strong>same total amount</strong> of CaCO3 as a single undivided block, with dashed lines marking how it's split into however many pieces you've chosen. The pieces below spread <strong>much</strong> further apart as they get smaller and more numerous, leaving far more room for HCl to reach a surface.</p>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:8px;">
+    <div class="neon-metric"><div class="num" id="statTotal">0</div><div class="lbl">HCl-surface collisions</div></div>
+    <div class="neon-metric"><div class="num" id="statEnc">0</div><div class="lbl">CO2 bubbles produced</div></div>
+    <div class="neon-metric"><div class="num" id="statSuccessPct">0%</div><div class="lbl">Effective collisions</div></div>
+    <div class="neon-metric"><div class="num" id="statRate">0.00</div><div class="lbl">Bubbles / second</div></div>
+    <div class="neon-metric"><div class="num" id="perimVal">0</div><div class="lbl">Relative surface area</div></div>
+  </div>
+  <div class="neon-legend">
+    <span><span class="neon-dot" style="background:#35e0ff;box-shadow:0 0 6px #35e0ff;"></span>HCl</span>
+    <span><span class="neon-dot" style="background:#8a7dff;box-shadow:0 0 6px #8a7dff;"></span>Solid CaCO3</span>
+    <span><span class="neon-dot" style="background:#ffe14d;box-shadow:0 0 6px #ffe14d;"></span>CO2 bubble</span>
+  </div>
+</div>
+
+<p style="font-size:12px;color:#666;">Not every collision reacts — only ones with enough energy behind them (collision theory's other requirement, alongside surface area). An effective collision releases a CO2 bubble; that HCl molecule fades away and a fresh one appears elsewhere a moment later, so [HCl] stays constant while still giving you time to see each reaction happen. As you increase the number of pieces, the reference panel confirms the total CaCO3 hasn't changed — only its surface area and spacing has — so far more collisions (and reactions) happen per second. This is exactly the reasoning used for "powdered marble reacts faster than marble chips."</p>
+
+</div>
+<script>
+// ===== Neon color palette =====
+const COL = {
+  acidC:'#35e0ff', ethC:'#ffe14d', esterC:'#39ff6a', waterO:'#8a7dff',
+  O:'#ff2fd6', H:'#eafcff', amber:'#ff9f2f', bad:'#ff3b3b', good:'#39ff6a'
+};
+
+// ===== Build a drawing "spec" for a molecule in a given structural style =====
+// type: 'acid' | 'ethanol' | 'ester' | 'water'
+// style: 'full' | 'skeletal' | 'condensed' | 'stereo'
+// Local frame convention: the reactive end (the -OH that must collide) points along local +x.
+function getSpec(type, style){
+  if(style==='condensed'){
+    const map = {
+      acid:{text:'CH3COOH', color:COL.acidC},
+      ethanol:{text:'CH3CH2OH', color:COL.ethC},
+      ester:{text:'CH3COOCH2CH3', color:COL.esterC},
+      water:{text:'H2O', color:COL.waterO}
+    };
+    return {condensed:map[type]};
+  }
+  if(type==='water'){
+    // water is drawn the same way regardless of style (no carbon skeleton to simplify)
+    return {
+      bonds:[
+        {x1:0,y1:0,x2:-11,y2:9,kind:'single',color:COL.waterO},
+        {x1:0,y1:0,x2:11,y2:9,kind:'single',color:COL.waterO}
+      ],
+      atoms:[
+        {x:0,y:0,r:9,color:COL.waterO,label:'O'},
+        {x:-11,y:9,r:5,color:COL.H,label:'H'},
+        {x:11,y:9,r:5,color:COL.H,label:'H'}
+      ],
+      highlight:null
+    };
+  }
+
+  const CC = type==='acid'?COL.acidC : type==='ethanol'?COL.ethC : COL.esterC;
+
+  if(style==='skeletal'){
+    if(type==='acid'){
+      return {
+        bonds:[
+          {x1:-40,y1:8,x2:-16,y2:-8,kind:'single',color:CC},
+          {x1:-16,y1:-8,x2:-16,y2:-26,kind:'double',color:CC},
+          {x1:-16,y1:-8,x2:8,y2:8,kind:'single',color:CC}
+        ],
+        atoms:[
+          {x:-16,y:-26,r:0,color:COL.O,label:'O'},
+          {x:8,y:8,r:0,color:COL.O,label:'O'},
+          {x:26,y:8,r:0,color:COL.H,label:'H'}
+        ],
+        highlight:{x:17,y:8,r:15},
+        reactC:{x:-16,y:-8}, leaveO:{x:8,y:8}
+      };
+    }
+    if(type==='ethanol'){
+      return {
+        bonds:[
+          {x1:-37,y1:8,x2:-13,y2:-8,kind:'single',color:CC},
+          {x1:-13,y1:-8,x2:10,y2:8,kind:'single',color:CC}
+        ],
+        atoms:[
+          {x:10,y:8,r:0,color:COL.O,label:'O'},
+          {x:28,y:8,r:0,color:COL.H,label:'H'}
+        ],
+        highlight:{x:19,y:8,r:15},
+        attackO:{x:10,y:8}
+      };
+    }
+    // ester skeletal
+    return {
+      bonds:[
+        {x1:-55,y1:8,x2:-31,y2:-8,kind:'single',color:CC},
+        {x1:-31,y1:-8,x2:-31,y2:-26,kind:'double',color:CC},
+        {x1:-31,y1:-8,x2:-6,y2:8,kind:'single',color:CC},
+        {x1:-6,y1:8,x2:17,y2:-8,kind:'single',color:CC},
+        {x1:17,y1:-8,x2:39,y2:8,kind:'single',color:CC}
+      ],
+      atoms:[
+        {x:-31,y:-26,r:0,color:COL.O,label:'O'},
+        {x:-6,y:8,r:0,color:COL.O,label:'O'}
+      ],
+      highlight:null
+    };
+  }
+
+  if(style==='stereo'){
+    // Real geometry: sp3 carbons drawn as zigzag with wedge/dash H's (tetrahedral,
+    // ~109.5 deg implied), sp2 carbonyl carbon drawn fully flat/planar (~120 deg,
+    // all plain bonds -- no wedge/dash, since it has no front/back ambiguity),
+    // and the ether/hydroxyl oxygen bonds bent rather than colinear (~105 deg).
+    if(type==='acid'){
+      return {
+        bonds:[
+          {x1:-46,y1:10,x2:-46,y2:26,kind:'wedge',color:CC},
+          {x1:-46,y1:10,x2:-60,y2:2,kind:'dash',color:CC},
+          {x1:-46,y1:10,x2:-34,y2:24,kind:'single',color:CC},
+          {x1:-46,y1:10,x2:-20,y2:-10,kind:'single',color:CC},
+          {x1:-20,y1:-10,x2:-20,y2:-30,kind:'double',color:CC},
+          {x1:-20,y1:-10,x2:4,y2:-2,kind:'single',color:CC},
+          {x1:4,y1:-2,x2:26,y2:10,kind:'single',color:COL.O}
+        ],
+        atoms:[
+          {x:-46,y:10,r:7,color:CC,label:'C'},
+          {x:-46,y:26,r:5,color:COL.H,label:'H'},
+          {x:-60,y:2,r:5,color:COL.H,label:'H'},
+          {x:-34,y:24,r:5,color:COL.H,label:'H'},
+          {x:-20,y:-10,r:7,color:CC,label:'C'},
+          {x:-20,y:-30,r:7,color:COL.O,label:'O'},
+          {x:4,y:-2,r:7,color:COL.O,label:'O'},
+          {x:26,y:10,r:5,color:COL.H,label:'H'}
+        ],
+        highlight:{x:15,y:4,r:15},
+        reactC:{x:-20,y:-10}, leaveO:{x:4,y:-2}
+      };
+    }
+    if(type==='ethanol'){
+      return {
+        bonds:[
+          {x1:-46,y1:10,x2:-46,y2:26,kind:'wedge',color:CC},
+          {x1:-46,y1:10,x2:-60,y2:2,kind:'dash',color:CC},
+          {x1:-46,y1:10,x2:-34,y2:24,kind:'single',color:CC},
+          {x1:-46,y1:10,x2:-20,y2:-10,kind:'single',color:CC},
+          {x1:-20,y1:-10,x2:-30,y2:-26,kind:'wedge',color:CC},
+          {x1:-20,y1:-10,x2:-10,y2:-27,kind:'dash',color:CC},
+          {x1:-20,y1:-10,x2:2,y2:8,kind:'single',color:COL.O},
+          {x1:2,y1:8,x2:24,y2:2,kind:'single',color:COL.O}
+        ],
+        atoms:[
+          {x:-46,y:10,r:7,color:CC,label:'C'},
+          {x:-46,y:26,r:5,color:COL.H,label:'H'},
+          {x:-60,y:2,r:5,color:COL.H,label:'H'},
+          {x:-34,y:24,r:5,color:COL.H,label:'H'},
+          {x:-20,y:-10,r:7,color:CC,label:'C'},
+          {x:-30,y:-26,r:5,color:COL.H,label:'H'},
+          {x:-10,y:-27,r:5,color:COL.H,label:'H'},
+          {x:2,y:8,r:7,color:COL.O,label:'O'},
+          {x:24,y:2,r:5,color:COL.H,label:'H'}
+        ],
+        highlight:{x:13,y:5,r:15},
+        attackO:{x:2,y:8}
+      };
+    }
+    // ester stereo
+    return {
+      bonds:[
+        {x1:-70,y1:10,x2:-70,y2:26,kind:'wedge',color:CC},
+        {x1:-70,y1:10,x2:-84,y2:2,kind:'dash',color:CC},
+        {x1:-70,y1:10,x2:-58,y2:24,kind:'single',color:CC},
+        {x1:-70,y1:10,x2:-44,y2:-10,kind:'single',color:CC},
+        {x1:-44,y1:-10,x2:-44,y2:-30,kind:'double',color:CC},
+        {x1:-44,y1:-10,x2:-20,y2:-2,kind:'single',color:CC},
+        {x1:-20,y1:-2,x2:2,y2:-16,kind:'single',color:COL.O},
+        {x1:2,y1:-16,x2:2,y2:-32,kind:'wedge',color:CC},
+        {x1:2,y1:-16,x2:18,y2:-32,kind:'dash',color:CC},
+        {x1:2,y1:-16,x2:26,y2:2,kind:'single',color:CC},
+        {x1:26,y1:2,x2:26,y2:18,kind:'wedge',color:CC},
+        {x1:26,y1:2,x2:40,y2:-6,kind:'dash',color:CC},
+        {x1:26,y1:2,x2:40,y2:18,kind:'single',color:CC}
+      ],
+      atoms:[
+        {x:-70,y:10,r:7,color:CC,label:'C'},
+        {x:-70,y:26,r:5,color:COL.H,label:'H'},
+        {x:-84,y:2,r:5,color:COL.H,label:'H'},
+        {x:-58,y:24,r:5,color:COL.H,label:'H'},
+        {x:-44,y:-10,r:7,color:CC,label:'C'},
+        {x:-44,y:-30,r:7,color:COL.O,label:'O'},
+        {x:-20,y:-2,r:7,color:COL.O,label:'O'},
+        {x:2,y:-16,r:7,color:CC,label:'C'},
+        {x:2,y:-32,r:5,color:COL.H,label:'H'},
+        {x:18,y:-32,r:5,color:COL.H,label:'H'},
+        {x:26,y:2,r:7,color:CC,label:'C'},
+        {x:26,y:18,r:5,color:COL.H,label:'H'},
+        {x:40,y:-6,r:5,color:COL.H,label:'H'},
+        {x:40,y:18,r:5,color:COL.H,label:'H'}
+      ],
+      highlight:null
+    };
+  }
+
+  // ---- FULL structural ----
+  let spec;
+  if(type==='acid'){
+    spec = {
+      bonds:[
+        {id:'c1ha',x1:-40,y1:0,x2:-40,y2:-16,kind:'single',color:CC},
+        {id:'c1hb',x1:-40,y1:0,x2:-40,y2:16,kind:'single',color:CC},
+        {id:'c1hc',x1:-40,y1:0,x2:-58,y2:0,kind:'single',color:CC},
+        {x1:-40,y1:0,x2:-16,y2:0,kind:'single',color:CC},
+        {x1:-16,y1:0,x2:-16,y2:-20,kind:'double',color:CC},
+        {x1:-16,y1:0,x2:8,y2:0,kind:'single',color:CC},
+        {x1:8,y1:0,x2:26,y2:0,kind:'single',color:COL.O}
+      ],
+      atoms:[
+        {x:-40,y:0,r:8,color:CC,label:'C'},
+        {x:-40,y:-16,r:5,color:COL.H,label:'H'},
+        {x:-40,y:16,r:5,color:COL.H,label:'H'},
+        {x:-58,y:0,r:5,color:COL.H,label:'H'},
+        {x:-16,y:0,r:8,color:CC,label:'C'},
+        {x:-16,y:-20,r:8,color:COL.O,label:'O'},
+        {x:8,y:0,r:8,color:COL.O,label:'O'},
+        {x:26,y:0,r:5,color:COL.H,label:'H'}
+      ],
+      highlight:{x:17,y:0,r:15},
+      reactC:{x:-16,y:0}, leaveO:{x:8,y:0}
+    };
+  } else if(type==='ethanol'){
+    spec = {
+      bonds:[
+        {id:'c1ha',x1:-37,y1:0,x2:-37,y2:-16,kind:'single',color:CC},
+        {id:'c1hb',x1:-37,y1:0,x2:-37,y2:16,kind:'single',color:CC},
+        {x1:-37,y1:0,x2:-55,y2:0,kind:'single',color:CC},
+        {x1:-37,y1:0,x2:-13,y2:0,kind:'single',color:CC},
+        {id:'c2ha',x1:-13,y1:0,x2:-13,y2:-16,kind:'single',color:CC},
+        {id:'c2hb',x1:-13,y1:0,x2:-13,y2:16,kind:'single',color:CC},
+        {x1:-13,y1:0,x2:10,y2:0,kind:'single',color:COL.O},
+        {x1:10,y1:0,x2:28,y2:0,kind:'single',color:COL.O}
+      ],
+      atoms:[
+        {x:-37,y:0,r:8,color:CC,label:'C'},
+        {x:-37,y:-16,r:5,color:COL.H,label:'H'},
+        {x:-37,y:16,r:5,color:COL.H,label:'H'},
+        {x:-55,y:0,r:5,color:COL.H,label:'H'},
+        {x:-13,y:0,r:8,color:CC,label:'C'},
+        {x:-13,y:-16,r:5,color:COL.H,label:'H'},
+        {x:-13,y:16,r:5,color:COL.H,label:'H'},
+        {x:10,y:0,r:8,color:COL.O,label:'O'},
+        {x:28,y:0,r:5,color:COL.H,label:'H'}
+      ],
+      highlight:{x:19,y:0,r:15},
+      attackO:{x:10,y:0}
+    };
+  } else { // ester
+    spec = {
+      bonds:[
+        {x1:-55,y1:0,x2:-55,y2:-16,kind:'single',color:CC},
+        {x1:-55,y1:0,x2:-55,y2:16,kind:'single',color:CC},
+        {x1:-55,y1:0,x2:-73,y2:0,kind:'single',color:CC},
+        {x1:-55,y1:0,x2:-31,y2:0,kind:'single',color:CC},
+        {x1:-31,y1:0,x2:-31,y2:-20,kind:'double',color:CC},
+        {x1:-31,y1:0,x2:-6,y2:0,kind:'single',color:COL.O},
+        {x1:-6,y1:0,x2:17,y2:0,kind:'single',color:COL.O},
+        {id:'c3ha',x1:17,y1:0,x2:17,y2:-16,kind:'single',color:CC},
+        {id:'c3hb',x1:17,y1:0,x2:17,y2:16,kind:'single',color:CC},
+        {x1:17,y1:0,x2:39,y2:0,kind:'single',color:CC},
+        {x1:39,y1:0,x2:39,y2:-16,kind:'single',color:CC},
+        {x1:39,y1:0,x2:39,y2:16,kind:'single',color:CC},
+        {x1:39,y1:0,x2:57,y2:0,kind:'single',color:CC}
+      ],
+      atoms:[
+        {x:-55,y:0,r:8,color:CC,label:'C'},
+        {x:-55,y:-16,r:5,color:COL.H,label:'H'},
+        {x:-55,y:16,r:5,color:COL.H,label:'H'},
+        {x:-73,y:0,r:5,color:COL.H,label:'H'},
+        {x:-31,y:0,r:8,color:CC,label:'C'},
+        {x:-31,y:-20,r:8,color:COL.O,label:'O'},
+        {x:-6,y:0,r:8,color:COL.O,label:'O'},
+        {x:17,y:0,r:8,color:CC,label:'C'},
+        {x:17,y:-16,r:5,color:COL.H,label:'H'},
+        {x:17,y:16,r:5,color:COL.H,label:'H'},
+        {x:39,y:0,r:8,color:CC,label:'C'},
+        {x:39,y:-16,r:5,color:COL.H,label:'H'},
+        {x:39,y:16,r:5,color:COL.H,label:'H'},
+        {x:57,y:0,r:5,color:COL.H,label:'H'}
+      ],
+      highlight:null
+    };
+  }
+
+  return spec;
+}
+
+// ===== Canvas renderer =====
+function neonLineC(c,x1,y1,x2,y2,color,w){
+  c.save(); c.shadowColor=color; c.shadowBlur=8;
+  c.strokeStyle=color; c.lineWidth=w||2.2;
+  c.beginPath(); c.moveTo(x1,y1); c.lineTo(x2,y2); c.stroke();
+  c.restore();
+}
+function wedgeC(c,x1,y1,x2,y2,color){
+  const dx=x2-x1, dy=y2-y1, len=Math.hypot(dx,dy);
+  const nx=-dy/len, ny=dx/len, w=5;
+  c.save(); c.shadowColor=color; c.shadowBlur=8;
+  c.fillStyle=color;
+  c.beginPath();
+  c.moveTo(x1,y1);
+  c.lineTo(x2+nx*w, y2+ny*w);
+  c.lineTo(x2-nx*w, y2-ny*w);
+  c.closePath(); c.fill();
+  c.restore();
+}
+function dashC(c,x1,y1,x2,y2,color){
+  const steps=5;
+  c.save(); c.shadowColor=color; c.shadowBlur=8; c.strokeStyle=color; c.lineWidth=2;
+  for(let i=1;i<=steps;i++){
+    const t=i/steps;
+    const px=x1+(x2-x1)*t, py=y1+(y2-y1)*t;
+    const dx=x2-x1, dy=y2-y1, len=Math.hypot(dx,dy);
+    const nx=-dy/len, ny=dx/len, w=1+t*4;
+    c.beginPath(); c.moveTo(px-nx*w,py-ny*w); c.lineTo(px+nx*w,py+ny*w); c.stroke();
+  }
+  c.restore();
+}
+function atomC(c,x,y,r,color,label){
+  c.save();
+  if(r>0){
+    c.shadowColor=color; c.shadowBlur=9;
+    c.beginPath(); c.arc(x,y,r,0,Math.PI*2);
+    c.fillStyle='#000'; c.fill();
+    c.lineWidth=1.6; c.strokeStyle=color; c.stroke();
+    c.shadowBlur=0;
+  } else {
+    c.shadowColor=color; c.shadowBlur=6;
+  }
+  c.fillStyle=color;
+  c.font=(r>0?'8.5px':'10px')+' sans-serif';
+  c.textAlign='center'; c.textBaseline='middle';
+  c.fillText(label,x,y+0.5);
+  c.restore();
+}
+function renderSpecCanvas(ctx, spec, scale){
+  scale = scale||1;
+  ctx.save();
+  ctx.scale(scale,scale);
+  if(spec.condensed){
+    const pad=10, txt=spec.condensed.text, color=spec.condensed.color;
+    ctx.font='13px monospace';
+    const w = ctx.measureText(txt).width;
+    ctx.save(); ctx.shadowColor=color; ctx.shadowBlur=8;
+    ctx.strokeStyle=color; ctx.lineWidth=1.8;
+    roundRectPath(ctx,-w/2-pad,-14,w+pad*2,28,7); ctx.stroke();
+    ctx.fillStyle=color; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(txt,0,0.5);
+    // reactive-end tick
+    ctx.beginPath(); ctx.moveTo(w/2+pad,0); ctx.lineTo(w/2+pad+10,0); ctx.stroke();
+    ctx.restore();
+    ctx.restore();
+    return;
+  }
+  for(const b of spec.bonds){
+    if(b.kind==='double'){
+      const dx=b.x2-b.x1, dy=b.y2-b.y1, len=Math.hypot(dx,dy);
+      const nx=-dy/len*3, ny=dx/len*3;
+      neonLineC(ctx,b.x1+nx,b.y1+ny,b.x2+nx,b.y2+ny,b.color);
+      neonLineC(ctx,b.x1-nx,b.y1-ny,b.x2-nx,b.y2-ny,b.color);
+    } else if(b.kind==='wedge'){ wedgeC(ctx,b.x1,b.y1,b.x2,b.y2,b.color); }
+    else if(b.kind==='dash'){ dashC(ctx,b.x1,b.y1,b.x2,b.y2,b.color); }
+    else { neonLineC(ctx,b.x1,b.y1,b.x2,b.y2,b.color); }
+  }
+  if(spec.highlight){
+    ctx.save(); ctx.globalAlpha=0.22; ctx.fillStyle=COL.amber;
+    ctx.beginPath(); ctx.arc(spec.highlight.x,spec.highlight.y,spec.highlight.r,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+  for(const a of spec.atoms){ atomC(ctx,a.x,a.y,a.r,a.color,a.label); }
+  ctx.restore();
+}
+function roundRectPath(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+
+// ===== SVG renderer =====
+function glowStyle(c){ return 'filter:drop-shadow(0 0 2px '+c+') drop-shadow(0 0 5px '+c+');'; }
+function renderSpecSVG(spec){
+  if(spec.condensed){
+    const c = spec.condensed.color, txt = spec.condensed.text;
+    const w = txt.length*8+20;
+    return '<g style="'+glowStyle(c)+'">'+
+      '<rect x="'+(-w/2)+'" y="-15" width="'+w+'" height="30" rx="7" fill="#000" stroke="'+c+'" stroke-width="1.8"/>'+
+      '<text x="0" y="0.5" font-family="monospace" font-size="13" text-anchor="middle" dominant-baseline="middle" fill="'+c+'">'+txt+'</text>'+
+      '<line x1="'+(w/2)+'" y1="0" x2="'+(w/2+10)+'" y2="0" stroke="'+c+'" stroke-width="1.8"/>'+
+      '</g>';
+  }
+  let s='';
+  for(const b of spec.bonds){
+    if(b.kind==='double'){
+      const dx=b.x2-b.x1, dy=b.y2-b.y1, len=Math.hypot(dx,dy);
+      const nx=-dy/len*3, ny=dx/len*3;
+      s+='<line x1="'+(b.x1+nx)+'" y1="'+(b.y1+ny)+'" x2="'+(b.x2+nx)+'" y2="'+(b.y2+ny)+'" stroke="'+b.color+'" stroke-width="2.2" style="'+glowStyle(b.color)+'"/>';
+      s+='<line x1="'+(b.x1-nx)+'" y1="'+(b.y1-ny)+'" x2="'+(b.x2-nx)+'" y2="'+(b.y2-ny)+'" stroke="'+b.color+'" stroke-width="2.2" style="'+glowStyle(b.color)+'"/>';
+    } else if(b.kind==='wedge'){
+      const dx=b.x2-b.x1, dy=b.y2-b.y1, len=Math.hypot(dx,dy);
+      const nx=-dy/len*5, ny=dx/len*5;
+      s+='<polygon points="'+b.x1+','+b.y1+' '+(b.x2+nx)+','+(b.y2+ny)+' '+(b.x2-nx)+','+(b.y2-ny)+'" fill="'+b.color+'" style="'+glowStyle(b.color)+'"/>';
+    } else if(b.kind==='dash'){
+      const steps=5;
+      for(let i=1;i<=steps;i++){
+        const t=i/steps;
+        const px=b.x1+(b.x2-b.x1)*t, py=b.y1+(b.y2-b.y1)*t;
+        const dx=b.x2-b.x1, dy=b.y2-b.y1, len=Math.hypot(dx,dy);
+        const nx=-dy/len, ny=dx/len, w=1+t*4;
+        s+='<line x1="'+(px-nx*w)+'" y1="'+(py-ny*w)+'" x2="'+(px+nx*w)+'" y2="'+(py+ny*w)+'" stroke="'+b.color+'" stroke-width="2" style="'+glowStyle(b.color)+'"/>';
+      }
+    } else {
+      s+='<line x1="'+b.x1+'" y1="'+b.y1+'" x2="'+b.x2+'" y2="'+b.y2+'" stroke="'+b.color+'" stroke-width="2.2" style="'+glowStyle(b.color)+'"/>';
+    }
+  }
+  if(spec.highlight){
+    s+='<circle cx="'+spec.highlight.x+'" cy="'+spec.highlight.y+'" r="'+spec.highlight.r+'" fill="'+COL.amber+'" opacity="0.22"/>';
+  }
+  for(const a of spec.atoms){
+    if(a.r>0){
+      s+='<circle cx="'+a.x+'" cy="'+a.y+'" r="'+a.r+'" fill="#000" stroke="'+a.color+'" stroke-width="1.6" style="'+glowStyle(a.color)+'"/>';
+      s+='<text x="'+a.x+'" y="'+(a.y+0.5)+'" font-size="8.5" text-anchor="middle" dominant-baseline="middle" fill="'+a.color+'">'+a.label+'</text>';
+    } else {
+      s+='<text x="'+a.x+'" y="'+(a.y+0.5)+'" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="'+a.color+'" style="'+glowStyle(a.color)+'">'+a.label+'</text>';
+    }
+  }
+  return s;
+}
+// ===== Structural formulas for the CaCO3 + HCl surface-area simulation =====
+const HCL_COLOR = '#35e0ff', CL_COLOR = '#39ff6a', CO_COLOR = '#ffe14d';
+
+function specHCl(){
+  return {
+    bonds:[ {x1:-14,y1:0,x2:14,y2:0,kind:'single',color:HCL_COLOR} ],
+    atoms:[
+      {x:-14,y:0,r:8,color:COL.H,label:'H'},
+      {x:14,y:0,r:10,color:CL_COLOR,label:'Cl'}
+    ],
+    highlight:null
+  };
+}
+function specCO2(){
+  return {
+    bonds:[
+      {x1:-24,y1:0,x2:-4,y2:0,kind:'double',color:CO_COLOR},
+      {x1:4,y1:0,x2:24,y2:0,kind:'double',color:CO_COLOR}
+    ],
+    atoms:[
+      {x:-24,y:0,r:9,color:COL.O,label:'O'},
+      {x:0,y:0,r:9,color:CO_COLOR,label:'C'},
+      {x:24,y:0,r:9,color:COL.O,label:'O'}
+    ],
+    highlight:null
+  };
+}
+// Carbonate ion, CO3(2-): trigonal planar, one C=O and two C-O(-)
+function specCarbonate(){
+  return {
+    bonds:[
+      {x1:0,y1:0,x2:0,y2:-22,kind:'double',color:CO_COLOR},
+      {x1:0,y1:0,x2:19,y2:11,kind:'single',color:CO_COLOR},
+      {x1:0,y1:0,x2:-19,y2:11,kind:'single',color:CO_COLOR}
+    ],
+    atoms:[
+      {x:0,y:0,r:8,color:CO_COLOR,label:'C'},
+      {x:0,y:-22,r:8,color:COL.O,label:'O'},
+      {x:19,y:11,r:8,color:COL.O,label:'O\u207b'},
+      {x:-19,y:11,r:8,color:COL.O,label:'O\u207b'}
+    ],
+    highlight:null
+  };
+}
+const canvas = document.getElementById('simCanvas');
+const ctx = canvas.getContext('2d');
+const W = 640, H = 560;
+const TOTAL_AREA = 220*220; // constant total CaCO3 area, regardless of how it's divided up
+const ORIG_SIDE = Math.sqrt(TOTAL_AREA); // side of the single, undivided block
+let nHcl = 24;
+const ACT_SPEED = 42; // minimum "impact speed" for a collision to actually react
+
+let particles = [];
+let squares = [];
+let bubbles = [];
+let running = false;
+let animId = null;
+let lastT = null;
+let stats = {reactions:0, startTime:0};
+
+function rnd(a,b){ return a+Math.random()*(b-a); }
+
+// Reference panel (top-left): always shows the SAME total amount of CaCO3 as
+// one undivided block, with dashed lines marking how it would be split into
+// the current number of pieces -- this is the fixed point of comparison.
+const REF_X = 16, REF_Y = 16, REF_SIZE = 100;
+const GRID_TOP = 150; // keeps the piece grid clear of the reference panel, always
+
+function buildSquares(n){
+  squares = [];
+  const side = ORIG_SIDE/Math.sqrt(n);          // shrinks with n -> n*side^2 == TOTAL_AREA always
+  const rows = Math.ceil(Math.sqrt(n));
+  const cols = Math.ceil(n/rows);
+  const margin = 16;
+  const availW = W - margin*2, availH = H - GRID_TOP - margin*2;
+  const desiredGap = 18 + 13*Math.sqrt(n);       // grows with n -> pieces spread further apart...
+  let cell = Math.min(side+desiredGap, availW/cols, availH/rows); // ...but never past the visible canvas
+  if(cell < side) cell = side; // pieces themselves always fully visible, gap can shrink to ~0 only in extreme cases
+  const footW = cols*cell, footH = rows*cell;
+  const originX = margin + (availW-footW)/2;
+  const originY = GRID_TOP + margin + (availH-footH)/2;
+  let count=0;
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      if(count>=n) break;
+      const cx = originX + cell*c + cell/2;
+      const cy = originY + cell*r + cell/2;
+      squares.push({x:cx-side/2, y:cy-side/2, w:side, h:side, scale:side/70});
+      count++;
+    }
+  }
+  document.getElementById('perimVal').textContent = Math.round(4*side*n);
+}
+
+function onHclChange(){
+  nHcl = +document.getElementById('hclSlider').value;
+  document.getElementById('hclVal').textContent = nHcl;
+  initSim();
+  draw();
+}
+
+function makeParticle(){
+  return {
+    x: rnd(20, W-20), y: rnd(20, H-20),
+    vx: rnd(-70,70), vy: rnd(-70,70),
+    theta: rnd(0,Math.PI*2), omega: rnd(-1,1),
+    cooldown:0
+  };
+}
+function initSim(){
+  particles = [];
+  for(let i=0;i<nHcl;i++) particles.push(makeParticle());
+  bubbles = [];
+  stats = {total:0, reactions:0, startTime:performance.now()};
+  updateStats();
+}
+
+function updateStats(){
+  document.getElementById('statTotal').textContent = stats.total;
+  document.getElementById('statEnc').textContent = stats.reactions;
+  document.getElementById('statSuccessPct').textContent = stats.total? Math.round(stats.reactions/stats.total*100)+'%' : '0%';
+  const elapsed = (performance.now()-stats.startTime)/1000;
+  document.getElementById('statRate').textContent = elapsed>0.5 ? (stats.reactions/elapsed).toFixed(2) : '0.00';
+}
+
+function onPiecesChange(){
+  const n = +document.getElementById('piecesSlider').value;
+  document.getElementById('piecesVal').textContent = n;
+  buildSquares(n);
+}
+
+function circleRectCollision(p, rad, r){
+  const cx = Math.max(r.x, Math.min(p.x, r.x+r.w));
+  const cy = Math.max(r.y, Math.min(p.y, r.y+r.h));
+  const dx = p.x-cx, dy = p.y-cy;
+  const dist = Math.hypot(dx,dy);
+  if(dist < rad && dist>0.001) return {nx:dx/dist, ny:dy/dist, overlap: rad-dist, cx:cx, cy:cy};
+  if(dist<=0.001) return {nx:0, ny:-1, overlap: rad, cx:cx, cy:cy};
+  return null;
+}
+
+function spawnBubble(x,y){
+  bubbles.push({x:x, y:y, vx:rnd(-8,8), vy:rnd(-55,-35), born:performance.now()});
+}
+
+function drawReferencePanel(n){
+  ctx.save();
+  ctx.fillStyle='rgba(255,255,255,0.03)';
+  ctx.fillRect(REF_X-8, REF_Y-8, REF_SIZE+16, REF_SIZE+34);
+  ctx.strokeStyle='#8a7dff'; ctx.shadowColor='#8a7dff'; ctx.shadowBlur=8; ctx.lineWidth=2;
+  ctx.strokeRect(REF_X, REF_Y, REF_SIZE, REF_SIZE);
+  ctx.setLineDash([4,3]);
+  ctx.lineWidth=1; ctx.globalAlpha=0.8;
+  const rows = Math.ceil(Math.sqrt(n));
+  const cols = Math.ceil(n/rows);
+  for(let c=1;c<cols;c++){
+    const x = REF_X + REF_SIZE*(c/cols);
+    ctx.beginPath(); ctx.moveTo(x,REF_Y); ctx.lineTo(x,REF_Y+REF_SIZE); ctx.stroke();
+  }
+  for(let r=1;r<rows;r++){
+    const y = REF_Y + REF_SIZE*(r/rows);
+    ctx.beginPath(); ctx.moveTo(REF_X,y); ctx.lineTo(REF_X+REF_SIZE,y); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  ctx.globalAlpha=1;
+  ctx.fillStyle='#8a7dff'; ctx.font='10px sans-serif'; ctx.textAlign='center';
+  ctx.shadowBlur=4;
+  ctx.fillText('same total CaCO3', REF_X+REF_SIZE/2, REF_Y+REF_SIZE+13);
+  ctx.fillText('(\u00f7'+n+' piece'+(n>1?'s':'')+')', REF_X+REF_SIZE/2, REF_Y+REF_SIZE+25);
+  ctx.restore();
+}
+
+function draw(){
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
+  ctx.save();
+  ctx.strokeStyle='rgba(255,47,214,0.08)'; ctx.lineWidth=1;
+  for(let x=0;x<=W;x+=40){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+  for(let y=0;y<=H;y+=40){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+  ctx.restore();
+
+  const n = squares.length;
+  drawReferencePanel(n);
+
+  for(const sq of squares){
+    ctx.save();
+    ctx.shadowColor='#8a7dff'; ctx.shadowBlur=10;
+    ctx.fillStyle='rgba(138,125,255,0.08)';
+    ctx.fillRect(sq.x,sq.y,sq.w,sq.h);
+    ctx.strokeStyle='#8a7dff'; ctx.lineWidth=2;
+    ctx.strokeRect(sq.x,sq.y,sq.w,sq.h);
+    ctx.restore();
+    ctx.save();
+    ctx.translate(sq.x+sq.w/2, sq.y+sq.h*0.38);
+    const cs = Math.max(0.35, Math.min(0.85, sq.scale));
+    ctx.scale(cs,cs);
+    renderSpecCanvas(ctx, specCarbonate());
+    ctx.restore();
+    if(sq.h>34){
+      ctx.save();
+      ctx.fillStyle='#8a7dff'; ctx.font='11px sans-serif'; ctx.textAlign='center';
+      ctx.shadowColor='#8a7dff'; ctx.shadowBlur=6;
+      ctx.fillText('Ca\u00b2\u207a CO3\u00b2\u207b', sq.x+sq.w/2, sq.y+sq.h*0.82);
+      ctx.restore();
+    }
+  }
+
+  for(const p of particles){
+    ctx.save();
+    ctx.translate(p.x,p.y);
+    if(p.dying){
+      const age = performance.now()-p.diedAt;
+      ctx.globalAlpha = Math.max(0, 1-age/500);
+      const s = Math.max(0.2, 1-age/500);
+      ctx.scale(s,s);
+    }
+    ctx.rotate(p.theta);
+    renderSpecCanvas(ctx, specHCl(), 0.85);
+    ctx.restore();
+  }
+
+  const now = performance.now();
+  bubbles = bubbles.filter(function(b){ return now-b.born<2600 && b.y>-40; });
+  for(const b of bubbles){
+    const age = now-b.born;
+    ctx.save();
+    ctx.translate(b.x,b.y);
+    ctx.globalAlpha = age>2000 ? Math.max(0,1-(age-2000)/600) : 1;
+    renderSpecCanvas(ctx, specCO2(), 0.55);
+    ctx.restore();
+  }
+}
+
+function step(t){
+  if(!lastT) lastT=t;
+  const dt = Math.min((t-lastT)/1000,0.05);
+  lastT=t;
+  const rad = 20;
+
+  for(const p of particles){
+    if(p.dying){
+      continue; // frozen in place while it fades out
+    }
+    p.x += p.vx*dt; p.y += p.vy*dt; p.theta += p.omega*dt;
+    if(p.x<rad){p.x=rad;p.vx*=-1;} if(p.x>W-rad){p.x=W-rad;p.vx*=-1;}
+    if(p.y<rad){p.y=rad;p.vy*=-1;} if(p.y>H-rad){p.y=H-rad;p.vy*=-1;}
+    if(p.cooldown>0) p.cooldown -= dt;
+
+    if(p.cooldown<=0){
+      for(const sq of squares){
+        const hit = circleRectCollision(p, rad, sq);
+        if(hit){
+          stats.total++;
+          const approachSpeed = -(p.vx*hit.nx + p.vy*hit.ny); // how fast it's moving INTO the surface
+          if(approachSpeed >= ACT_SPEED){
+            // enough energy -- this HCl molecule reacts: it disappears (fades
+            // out), and a fresh one appears elsewhere so [HCl] stays constant
+            p.dying = true;
+            p.diedAt = performance.now();
+            p.x += hit.nx*hit.overlap; p.y += hit.ny*hit.overlap;
+            stats.reactions++;
+            spawnBubble(hit.cx,hit.cy);
+          } else {
+            // not enough energy -- an ineffective collision, it just bounces off
+            const rel = p.vx*hit.nx + p.vy*hit.ny;
+            if(rel<0){ p.vx -= 2*rel*hit.nx; p.vy -= 2*rel*hit.ny; }
+            p.x += hit.nx*hit.overlap; p.y += hit.ny*hit.overlap;
+            p.cooldown = 0.25;
+          }
+          updateStats();
+          break;
+        }
+      }
+    }
+  }
+
+  const now0 = performance.now();
+  const before = particles.length;
+  particles = particles.filter(function(p){ return !(p.dying && now0-p.diedAt>500); });
+  const removed = before - particles.length;
+  for(let i=0;i<removed;i++) particles.push(makeParticle());
+
+  for(const b of bubbles){
+    b.x += b.vx*dt; b.y += b.vy*dt; b.vy -= 8*dt;
+  }
+
+  draw();
+  if(running) animId = requestAnimationFrame(step);
+}
+
+function toggleSim(){
+  running = !running;
+  document.getElementById('playBtn').textContent = running?'Pause':'Start';
+  if(running){ lastT=null; animId=requestAnimationFrame(step); }
+  else if(animId) cancelAnimationFrame(animId);
+}
+function resetSim(){
+  running=false;
+  document.getElementById('playBtn').textContent='Start';
+  if(animId) cancelAnimationFrame(animId);
+  initSim();
+  draw();
+}
+
+buildSquares(+document.getElementById('piecesSlider').value);
+initSim();
+draw();
+
+</script>
+</body>
+</html>
