@@ -1,0 +1,717 @@
+<h2 class="sr-only">3D simulation of three flasks of calcium carbonate marble chips reacting with hydrochloric acid of three different concentrations — dilute, medium, and concentrated — each flask connected by a tube to its own gas syringe that collects the carbon dioxide produced. Hydrochloric acid is the limiting reagent and marble is in excess and identical in every flask, so the more concentrated acid both reacts faster and produces a larger final volume of gas; the three live graph lines rise at different rates and level off at three different heights rather than converging, and the colour of each solution fades toward the same pale shade as its acid is used up. An optional close-up view shows three small circular panels, one floating above each flask, comparing how much more frequently acid particles collide with the marble surface as concentration increases.</h2>
+<div style="background:#000; border-radius:12px; padding:20px 16px; font-family:var(--font-sans, sans-serif);">
+
+  <div style="text-align:center; color:#FFFA1A; font-size:18px; font-weight:600; letter-spacing:0.3px; margin-bottom:14px; text-shadow:0 0 6px rgba(255,250,26,0.85), 0 0 16px rgba(255,250,26,0.5);">
+    CaCO<sub>3</sub>(s) + 2HCl(aq) &rarr; CaCl<sub>2</sub>(aq) + H<sub>2</sub>O(l) + CO<sub>2</sub>(g)
+  </div>
+
+  <div id="stageWrap" style="position:relative; width:100%; height:460px; border-radius:10px; overflow:hidden; background:#000;">
+    <canvas id="three-canvas" style="width:100%; height:100%; display:block; cursor:grab;"></canvas>
+    <div style="position:absolute; bottom:8px; right:12px; font-size:11px; color:#5a5a5a; font-family:sans-serif; text-align:right;">drag to rotate &middot; scroll to zoom</div>
+
+    <div style="position:absolute; left:10px; top:50%; transform:translateY(-50%); z-index:6; display:flex; flex-direction:column; align-items:center; gap:4px; background:rgba(0,0,0,0.45); padding:8px 4px; border-radius:8px;">
+      <span style="color:#39FFE8; font-size:13px; line-height:1;">&uarr;</span>
+      <input type="range" id="panSlider" min="-4" max="4" step="0.05" value="0"
+        style="width:150px; transform:rotate(-90deg); accent-color:#39FFE8; cursor:pointer;"
+        oninput="onPanSlider(this.value)" aria-label="Scroll the view up or down">
+      <span style="color:#39FFE8; font-size:13px; line-height:1;">&darr;</span>
+    </div>
+
+    <div style="position:absolute; left:50%; bottom:10px; transform:translateX(-50%); z-index:6; display:flex; align-items:center; gap:6px; background:rgba(0,0,0,0.45); padding:4px 8px; border-radius:8px;">
+      <span style="color:#39FFE8; font-size:13px; line-height:1;">&larr;</span>
+      <input type="range" id="panSliderX" min="-8" max="8" step="0.05" value="0"
+        style="width:150px; accent-color:#39FFE8; cursor:pointer;"
+        oninput="onPanSliderX(this.value)" aria-label="Scroll the view left or right">
+      <span style="color:#39FFE8; font-size:13px; line-height:1;">&rarr;</span>
+    </div>
+
+    <div class="collision-overlay" id="collisionOverlay-dilute" style="display:none;">
+      <div class="collision-circle-sm"><canvas id="collisionDilute" width="140" height="140"></canvas></div>
+      <div class="collision-overlay-label">Dilute<br>0.5 mol/dm&sup3;</div>
+    </div>
+    <div class="collision-overlay" id="collisionOverlay-medium" style="display:none;">
+      <div class="collision-circle-sm"><canvas id="collisionMedium" width="140" height="140"></canvas></div>
+      <div class="collision-overlay-label">Medium<br>1.0 mol/dm&sup3;</div>
+    </div>
+    <div class="collision-overlay" id="collisionOverlay-concentrated" style="display:none;">
+      <div class="collision-circle-sm"><canvas id="collisionConcentrated" width="140" height="140"></canvas></div>
+      <div class="collision-overlay-label">Concentrated<br>2.0 mol/dm&sup3;</div>
+    </div>
+  </div>
+  <p style="color:#666; font-size:11px; margin:6px 2px 0;">Use the &uarr;&darr; slider on the left and the &larr;&rarr; slider at the bottom to scroll the view &mdash; handy for seeing a flask and its collision close-up at the same time when zoomed in.</p>
+
+  <style>
+    button.simbtn { background:#0a0a0a; border:1px solid #39FFE8; color:#39FFE8; border-radius:6px; padding:8px 16px; font-size:13px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+    button.simbtn:hover { background:#102; }
+    button.simbtn.alt { border-color:#FF7CD4; color:#FF7CD4; }
+    button.simbtn.alt:hover { background:#210016; }
+    .collision-overlay { position:absolute; left:0; top:0; transform:translate(-50%,-100%); pointer-events:none; text-align:center; z-index:5; }
+    .collision-circle-sm { width:130px; height:130px; border-radius:50%; overflow:hidden; border:3px solid #ff2fd6; box-shadow:0 0 14px rgba(255,47,214,0.5); background:#000; margin:0 auto; }
+    .collision-circle-sm canvas { display:block; width:100%; height:100%; }
+    .collision-overlay-label { margin-top:4px; font-size:10.5px; line-height:1.25; color:#eee; font-weight:600; text-shadow:0 0 3px rgba(0,0,0,0.9); background:rgba(0,0,0,0.6); border-radius:4px; padding:2px 7px; display:inline-block; }
+  </style>
+
+  <div style="display:flex; align-items:center; gap:12px; margin:14px 0 8px; flex-wrap:wrap;">
+    <button class="simbtn" id="playBtn" onclick="toggleRun()"><i class="ti ti-player-play" aria-hidden="true"></i><span id="playLabel">Start all reactions</span></button>
+    <button class="simbtn" onclick="resetSim()"><i class="ti ti-refresh" aria-hidden="true"></i>Reset all</button>
+    <button class="simbtn alt" id="collisionBtn" onclick="toggleCollisionPanel()"><i class="ti ti-circle-dot" aria-hidden="true"></i><span id="collisionBtnLabel">Show collision close-up</span></button>
+    <span style="color:#9fffb0; font-size:13px;">Time: <span id="timeOut">0.0</span> s</span>
+  </div>
+
+  <div style="display:flex; align-items:center; gap:18px; margin:2px 0 6px; flex-wrap:wrap; font-size:13px;">
+    <span style="color:#39FFE8;">&#9679; Dilute (0.5 mol/dm&sup3;): <span id="volOut-dilute">0.0</span> cm&sup3;</span>
+    <span style="color:#FF7CD4;">&#9679; Medium (1.0 mol/dm&sup3;): <span id="volOut-medium">0.0</span> cm&sup3;</span>
+    <span style="color:#FFD23C;">&#9679; Concentrated (2.0 mol/dm&sup3;): <span id="volOut-concentrated">0.0</span> cm&sup3;</span>
+  </div>
+
+  <div style="position:relative; width:100%; height:260px; margin-top:10px;">
+    <canvas id="volChart" role="img" aria-label="Line chart of volume of carbon dioxide gas evolved in cubic centimeters versus time in seconds for three hydrochloric acid concentrations, three curves plotted together, the most concentrated acid rising steepest and levelling off highest near 48 cubic centimeters, the medium concentration next, and the dilute acid rising slowest and levelling off lowest near 12 cubic centimeters, the three curves never meeting">Three curves all rise from zero and level off, but at three different heights: dilute levels off near 12 cubic centimeters, medium near 24, and concentrated near 48, with the concentrated curve also rising the fastest at the start.</canvas>
+  </div>
+
+  <p id="footnote" style="color:#888; font-size:12px; margin-top:10px; line-height:1.5;">Every flask starts with the same excess of marble chips (so surface area is not a variable here) and the same volume of acid &mdash; only the acid's concentration differs. Because hydrochloric acid is the <em>limiting</em> reagent in every flask, a more concentrated acid contains more moles of HCl in that same volume, so it produces a genuinely larger final volume of CO&#8322; &mdash; the three curves level off at three different heights and never meet. As the acid is used up, the colour of every solution fades toward the same pale shade, since all three end up as the same dilute calcium chloride solution once the limiting HCl runs out. The steeper initial slope for the more concentrated acid reflects collision theory: more HCl particles packed into the same volume collide with the marble surface more often, so gas is produced faster right from the start.</p>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+(function(){
+  if (typeof THREE === 'undefined' || typeof Chart === 'undefined') {
+    document.body.innerHTML = '<div style="color:#ff5c5c;background:#1a0000;border:1px solid #ff5c5c;border-radius:8px;padding:20px;max-width:600px;margin:60px auto;font-family:sans-serif;">Could not load required libraries from the CDN. Try opening this in a regular browser tab.</div>';
+    return;
+  }
+  const canvas = document.getElementById('three-canvas');
+  const wrap = canvas.parentElement;
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.shadowMap.enabled = true;
+
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x000000, 0.018);
+  const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 120);
+
+  function resize(){
+    const w = wrap.clientWidth, h = wrap.clientHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+
+  scene.add(new THREE.AmbientLight(0x223344, 0.85));
+  const key = new THREE.DirectionalLight(0xffffff, 1.3);
+  key.position.set(5, 10, 7); key.castShadow = true; key.shadow.mapSize.set(1024,1024);
+  scene.add(key);
+  const cyanLight = new THREE.PointLight(0x39FFE8, 1.1, 40);
+  cyanLight.position.set(-9, 5, 6); scene.add(cyanLight);
+  const magLight = new THREE.PointLight(0xFF3CAC, 1.0, 40);
+  magLight.position.set(0, 4, -6); scene.add(magLight);
+  const amberLight = new THREE.PointLight(0xFFD23C, 1.0, 40);
+  amberLight.position.set(9, 4, 6); scene.add(amberLight);
+
+  // No floor plane -- the apparatus floats in plain black space rather than sitting on
+  // a visible ground surface.
+
+  // ---------- See-through bubbles with a bright Fresnel rim and a fade uniform ----------
+  function makeBubbleMaterial(){
+    return new THREE.ShaderMaterial({
+      uniforms: { color: { value: new THREE.Color(0xcdfeff) }, fade: { value: 1.0 } },
+      vertexShader: `
+        varying vec3 vNormal;
+        varying vec3 vViewDir;
+        void main(){
+          vNormal = normalize(normalMatrix * normal);
+          vec4 mvPosition = modelViewMatrix * vec4(position,1.0);
+          vViewDir = normalize(-mvPosition.xyz);
+          gl_Position = projectionMatrix * mvPosition;
+        }`,
+      fragmentShader: `
+        uniform vec3 color;
+        uniform float fade;
+        varying vec3 vNormal;
+        varying vec3 vViewDir;
+        void main(){
+          vec3 n = normalize(vNormal);
+          vec3 v = normalize(vViewDir);
+          float fresnel = pow(1.0 - max(dot(n, v), 0.0), 2.4);
+          vec3 lightDir = normalize(vec3(0.4, 0.9, 0.35));
+          float spec = pow(max(dot(reflect(-lightDir, n), v), 0.0), 70.0);
+          vec3 rim = mix(color, vec3(1.0), 0.35);
+          vec3 finalColor = mix(color*0.55, rim, fresnel) + spec*0.85;
+          float alpha = mix(0.045, 0.72, fresnel) * fade + spec*0.55*fade;
+          gl_FragColor = vec4(finalColor, clamp(alpha, 0.0, 1.0));
+        }`,
+      transparent: true, depthWrite:false, side: THREE.DoubleSide
+    });
+  }
+
+  function makeLabel(lines, sizePx){
+    sizePx = sizePx || 40;
+    const c = document.createElement('canvas'); c.width = 320; c.height = 140;
+    const ctx = c.getContext('2d');
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = 'bold ' + sizePx + 'px sans-serif';
+    ctx.fillStyle = lines[0].color;
+    ctx.fillText(lines[0].text, 160, 42);
+    ctx.font = (sizePx-6) + 'px sans-serif';
+    ctx.fillStyle = lines[1].color;
+    ctx.fillText(lines[1].text, 160, 96);
+    const tex = new THREE.CanvasTexture(c);
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent:true, depthTest:false }));
+    spr.scale.set(1.5,0.66,1);
+    return spr;
+  }
+
+  // Flat, plain neon-yellow label floating above each flask -- no shadow/glow, no per-flask
+  // colour variation, just clear solid text.
+  const LABEL_COLOR = '#FFFA1A';
+  function makeGlowLabel(lines){
+    const c = document.createElement('canvas'); c.width = 420; c.height = 180;
+    const ctx = c.getContext('2d');
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = LABEL_COLOR;
+    ctx.font = 'bold 50px sans-serif';
+    ctx.fillText(lines[0].text, 210, 56);
+    ctx.font = 'bold 44px sans-serif';
+    ctx.fillText(lines[1].text, 210, 124);
+    const tex = new THREE.CanvasTexture(c);
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent:true, depthTest:false }));
+    spr.scale.set(1.95,0.84,1);
+    return spr;
+  }
+
+  // Shared decay constant: how quickly HCl is used up, fractionally, is the same in every
+  // flask (same intrinsic reactivity, marble surface area, temperature). Only the *amount*
+  // of HCl differs between flasks, which is why Vmax below scales with concentration while
+  // K stays fixed -- this is what makes the concentrated flask both faster AND bigger,
+  // without the three curves ever converging.
+  const K = 0.045;
+  // Same graduated barrel scale is used for every syringe, so the three plungers can be
+  // compared directly on one ruler even though they travel very different distances.
+  const SCALE_MAX_CC = 60;
+  const SURFACE_Y = 1.5; // liquid surface height, just below the true top of liquidPts (1.55)
+  // Once HCl (the limiting reagent) is used up, every flask is left with the same dilute
+  // CaCl2 solution -- so all three liquids should fade toward this same pale colour/opacity
+  // by the time each reaction finishes, regardless of how deeply coloured they started.
+  const END_LIQUID_COLOR = new THREE.Color(0xdff3f7);
+  const END_LIQUID_OPACITY = 0.15;
+
+  const presets = {
+    dilute:       { key:'dilute',       label:'Dilute',       conc:0.5, xPos:-9, color:'#39FFE8',
+                    Vmax:12, bubbleRateMult:0.5, bubbleSpeedMult:0.8,  bubbleSizeMult:0.85,
+                    liquidColor:0xfff3c4, liquidOpacity:0.20 },
+    medium:       { key:'medium',       label:'Medium',       conc:1.0, xPos:0,    color:'#FF7CD4',
+                    Vmax:24, bubbleRateMult:1.0, bubbleSpeedMult:1.0,  bubbleSizeMult:1.0,
+                    liquidColor:0xffd23c, liquidOpacity:0.28 },
+    concentrated: { key:'concentrated', label:'Concentrated', conc:2.0, xPos:9,  color:'#FFD23C',
+                    Vmax:48, bubbleRateMult:2.0, bubbleSpeedMult:1.25, bubbleSizeMult:1.15,
+                    liquidColor:0xff9014, liquidOpacity:0.36 }
+  };
+  const RIG_SCALE = 0.85;
+
+  function buildRig(preset){
+    const rig = { preset, done:false, dataArr:[{x:0,y:0}] };
+    const rigRoot = new THREE.Group();
+    rigRoot.position.set(preset.xPos, 0, 0);
+    rigRoot.scale.setScalar(RIG_SCALE);
+    scene.add(rigRoot);
+    rig.rigRoot = rigRoot;
+
+    // ---- retort stand ----
+    const standMat = new THREE.MeshStandardMaterial({ color:0x666666, metalness:0.7, roughness:0.35 });
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,5,16), standMat);
+    pole.position.set(-2.6,2.5,0); pole.castShadow = true; rigRoot.add(pole);
+    const base = new THREE.Mesh(new THREE.BoxGeometry(1.0,0.12,1.0), standMat);
+    base.position.set(-2.6,0.06,0); base.castShadow = true; base.receiveShadow = true; rigRoot.add(base);
+    const clampArm = new THREE.Mesh(new THREE.BoxGeometry(2.8,0.08,0.08), standMat);
+    clampArm.position.set(-1.3,3.15,0); rigRoot.add(clampArm);
+    const clampRing = new THREE.Mesh(new THREE.TorusGeometry(0.5,0.05,10,28), standMat);
+    clampRing.position.set(0,3.15,0); clampRing.rotation.x = Math.PI/2; rigRoot.add(clampRing);
+
+    // ---- flask ----
+    const flaskGroup = new THREE.Group(); rigRoot.add(flaskGroup);
+    rig.flaskGroup = flaskGroup;
+    const flaskPts = [
+      [0,0],[1.55,0.05],[1.6,0.15],[1.5,0.45],[1.25,1.0],[0.9,1.6],
+      [0.58,2.0],[0.44,2.05],[0.44,3.1],[0.5,3.18],[0.47,3.22]
+    ].map(p => new THREE.Vector2(p[0], p[1]));
+    const flask = new THREE.Mesh(new THREE.LatheGeometry(flaskPts, 40), new THREE.MeshPhysicalMaterial({
+      color:0xbfe9ff, transparent:true, opacity:0.22, roughness:0.05, metalness:0,
+      transmission:0.55, thickness:0.6, ior:1.4, clearcoat:1, clearcoatRoughness:0.08, side:THREE.DoubleSide, depthWrite:false
+    }));
+    flask.renderOrder = 2; flaskGroup.add(flask);
+
+    const liquidPts = [[0,0],[1.5,0.05],[1.55,0.15],[1.45,0.4],[1.2,0.95],[0.85,1.55]].map(p => new THREE.Vector2(p[0], p[1]));
+    const liquid = new THREE.Mesh(new THREE.LatheGeometry(liquidPts, 32), new THREE.MeshPhysicalMaterial({
+      color:preset.liquidColor, transparent:true, opacity:preset.liquidOpacity, roughness:0.15, transmission:0.25, side:THREE.DoubleSide, depthWrite:false
+    }));
+    liquid.renderOrder = 1; flaskGroup.add(liquid);
+    rig.liquid = liquid;
+    rig.liquidStartColor = new THREE.Color(preset.liquidColor);
+    rig.liquidStartOpacity = preset.liquidOpacity;
+
+    // ---- marble (CaCO3) chips: same size/count in every flask, since only concentration varies ----
+    const granuleMat = new THREE.MeshStandardMaterial({ color:0xcfc9ba, metalness:0.06, roughness:0.6 });
+    rig.granules = [];
+    for (let i=0;i<10;i++){
+      const r = 0.09 + Math.random()*0.05;
+      const geo = new THREE.IcosahedronGeometry(r, 0);
+      const posAttr = geo.attributes.position;
+      for (let v=0; v<posAttr.count; v++){
+        posAttr.setXYZ(v,
+          posAttr.getX(v) * (0.85+Math.random()*0.3),
+          posAttr.getY(v) * (0.85+Math.random()*0.3),
+          posAttr.getZ(v) * (0.85+Math.random()*0.3));
+      }
+      geo.computeVertexNormals();
+      const m = new THREE.Mesh(geo, granuleMat);
+      const ang = Math.random()*Math.PI*2, rad = Math.random()*0.42;
+      m.position.set(Math.cos(ang)*rad, 0.08+Math.random()*0.16, Math.sin(ang)*rad);
+      m.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
+      m.renderOrder = 3;
+      flaskGroup.add(m);
+      rig.granules.push(m);
+    }
+
+    // ---- bubbles rising through the liquid, popping right at the surface ----
+    const bubbleMat = makeBubbleMaterial();
+    function spawnBubble(m, rateFrac){
+      rateFrac = (rateFrac===undefined) ? 1 : rateFrac;
+      const g = rig.granules[Math.floor(Math.random()*rig.granules.length)];
+      const ang = Math.random()*Math.PI*2;
+      if (g){ m.position.set(g.position.x + Math.cos(ang)*0.05, g.position.y + 0.05, g.position.z + Math.sin(ang)*0.05); }
+      else { m.position.set(Math.cos(ang)*0.2, 0.1, Math.sin(ang)*0.2); }
+      m.userData.baseX = m.position.x; m.userData.baseZ = m.position.z;
+      m.userData.speed = (0.3 + Math.random()*0.5) * (0.55+0.45*rateFrac) * preset.bubbleSpeedMult;
+      m.userData.wobble = 0.04 + Math.random()*0.04;
+      m.userData.wobbleFreq = 2 + Math.random()*2;
+      m.userData.phase = Math.random()*Math.PI*2;
+      m.userData.spawnTime = performance.now();
+      m.userData.baseScale = (1.1 + Math.random()*1.0) * (0.45+0.55*rateFrac) * preset.bubbleSizeMult;
+      m.userData.dying = false;
+      m.scale.setScalar(0.05);
+    }
+    rig.bubbles = [];
+    const bubblePoolSize = Math.max(6, Math.round(16 * preset.bubbleRateMult));
+    for (let i=0;i<bubblePoolSize;i++){
+      const r = 0.026 + Math.random()*0.03;
+      const m = new THREE.Mesh(new THREE.SphereGeometry(r,10,10), bubbleMat);
+      m.renderOrder = 999;
+      flaskGroup.add(m);
+      spawnBubble(m, 1);
+      m.position.y = 0.1 + Math.random()*1.3;
+      rig.bubbles.push(m);
+    }
+    rig.spawnBubble = spawnBubble;
+
+    // ---- stopper + tube to syringe (no cotton plug on this apparatus) ----
+    const stopper = new THREE.Mesh(new THREE.CylinderGeometry(0.46,0.46,0.3,24),
+      new THREE.MeshStandardMaterial({ color:0x1a1a1a, roughness:0.85 }));
+    stopper.position.set(0,3.25,0); flaskGroup.add(stopper);
+
+    const glassMat = new THREE.MeshPhysicalMaterial({
+      color:0xd9fff5, transparent:true, opacity:0.3, roughness:0.05, transmission:0.5, thickness:0.4, ior:1.4, clearcoat:1, side:THREE.DoubleSide
+    });
+    const barrelGeo = new THREE.CylinderGeometry(0.55,0.55,3,32,1,true); barrelGeo.rotateZ(Math.PI/2);
+    const barrel = new THREE.Mesh(barrelGeo, glassMat);
+    barrel.position.set(5.1,2.3,0); barrel.renderOrder = 2; rigRoot.add(barrel);
+
+    const capGeo = new THREE.CylinderGeometry(0.55,0.55,0.06,32); capGeo.rotateZ(Math.PI/2);
+    const cap = new THREE.Mesh(capGeo, new THREE.MeshStandardMaterial({ color:0x222222, roughness:0.7 }));
+    cap.position.set(3.62,2.3,0); rigRoot.add(cap);
+
+    const nozzleMat = new THREE.MeshStandardMaterial({ color:0xff3cac, metalness:0.2, roughness:0.5, emissive:0x440a22, emissiveIntensity:0.5 });
+    const nozzleGeo = new THREE.CylinderGeometry(0.1,0.1,0.28,12); nozzleGeo.rotateZ(Math.PI/2);
+    const nozzle = new THREE.Mesh(nozzleGeo, nozzleMat);
+    nozzle.position.set(3.46,2.3,0); rigRoot.add(nozzle);
+
+    const tubeCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(3.32,2.3,0), new THREE.Vector3(3.02,2.32,0),
+      new THREE.Vector3(2.8,2.6,0), new THREE.Vector3(2.72,3.1,0),
+      new THREE.Vector3(2.85,3.6,0), new THREE.Vector3(1.6,4.1,0),
+      new THREE.Vector3(0,4.1,0), new THREE.Vector3(0,3.4,0)
+    ]);
+    rigRoot.add(new THREE.Mesh(new THREE.TubeGeometry(tubeCurve, 50, 0.07, 10, false), nozzleMat));
+
+    const tickMat = new THREE.MeshBasicMaterial({ color:0x39FFE8 });
+    const barrelStartX = 3.7, barrelUsableLen = 2.7;
+    for (let v=0; v<=SCALE_MAX_CC; v+=10){
+      const x = barrelStartX + (v/SCALE_MAX_CC)*barrelUsableLen;
+      const tick = new THREE.Mesh(new THREE.BoxGeometry(0.02,0.12,0.02), tickMat);
+      tick.position.set(x, 2.3+0.56, 0);
+      rigRoot.add(tick);
+      const tLabel = makeLabel([{text:String(v),color:'#39FFE8'},{text:'',color:'#000'}], 44);
+      tLabel.scale.set(0.34,0.15,1);
+      tLabel.position.set(x, 2.3+0.78, 0);
+      rigRoot.add(tLabel);
+    }
+    const unitLabel = makeLabel([{text:'cm\u00b3',color:'#39FFE8'},{text:'',color:'#000'}], 44);
+    unitLabel.scale.set(0.34,0.15,1);
+    unitLabel.position.set(barrelStartX + barrelUsableLen + 0.25, 2.3+0.78, 0);
+    rigRoot.add(unitLabel);
+
+    const legMat = new THREE.MeshStandardMaterial({ color:0x555555, metalness:0.6, roughness:0.4 });
+    const leg1 = new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,2.2,10), legMat); leg1.position.set(4.3,1.15,0); rigRoot.add(leg1);
+    const leg2 = new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,2.2,10), legMat); leg2.position.set(5.9,1.15,0); rigRoot.add(leg2);
+
+    const gasFillGeo = new THREE.CylinderGeometry(0.48,0.48,1,24,1,true); gasFillGeo.rotateZ(Math.PI/2);
+    const gasFill = new THREE.Mesh(gasFillGeo, new THREE.MeshBasicMaterial({ color:0x39ff14, transparent:true, opacity:0.28, depthWrite:false }));
+    gasFill.scale.x = 0.02; gasFill.position.set(3.63,2.3,0); rigRoot.add(gasFill);
+    rig.gasFill = gasFill;
+
+    const plungerGroup = new THREE.Group(); plungerGroup.position.set(3.9,2.3,0);
+    const sealGeo = new THREE.CylinderGeometry(0.5,0.5,0.3,32); sealGeo.rotateZ(Math.PI/2);
+    plungerGroup.add(new THREE.Mesh(sealGeo, new THREE.MeshStandardMaterial({ color:0xff3cac, metalness:0.3, roughness:0.4 })));
+    const rodGeo = new THREE.CylinderGeometry(0.07,0.07,1.3,16); rodGeo.rotateZ(Math.PI/2);
+    const rod = new THREE.Mesh(rodGeo, legMat); rod.position.set(0.78,0,0); plungerGroup.add(rod);
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.18,0.1,24), new THREE.MeshStandardMaterial({ color:0x444444, metalness:0.5, roughness:0.4 }));
+    handle.rotation.z = Math.PI/2; handle.position.set(1.45,0,0); plungerGroup.add(handle);
+    rigRoot.add(plungerGroup);
+    rig.plungerGroup = plungerGroup;
+
+    // floating concentration label above the flask, echoing the reference diagram --
+    // rendered with a bright neon glow so it stands out against the dark scene
+    const concLabel = makeGlowLabel([
+      {text:preset.label},
+      {text:preset.conc.toFixed(1)+' mol/dm\u00b3'}
+    ]);
+    concLabel.position.set(0, 4.55, 0.4);
+    rigRoot.add(concLabel);
+
+    return rig;
+  }
+
+  const rigs = [buildRig(presets.dilute), buildRig(presets.medium), buildRig(presets.concentrated)];
+
+  let theta = 0.25, phi = 1.15, radius = 44;
+  const BASE_TARGET_Y = 2.05;
+  const BASE_TARGET_X = 1.7;
+  const target = new THREE.Vector3(BASE_TARGET_X, BASE_TARGET_Y, 0);
+  function updateCam(){
+    camera.position.x = target.x + radius*Math.sin(phi)*Math.sin(theta);
+    camera.position.z = target.z + radius*Math.sin(phi)*Math.cos(theta);
+    camera.position.y = target.y + radius*Math.cos(phi);
+    camera.lookAt(target);
+  }
+  // Pan moves the look-at target sideways/up-down in the camera's own screen plane, so it
+  // works the same regardless of which way the camera is currently facing.
+  function panCamera(dxPx, dyPx){
+    const forward = new THREE.Vector3().subVectors(target, camera.position).normalize();
+    const right = new THREE.Vector3().crossVectors(forward, camera.up).normalize();
+    const up = new THREE.Vector3().crossVectors(right, forward).normalize();
+    const panScale = radius * 0.0018;
+    target.addScaledVector(right, -dxPx*panScale);
+    target.addScaledVector(up, dyPx*panScale);
+    updateCam();
+  }
+  let dragging = false, panning = false, px=0, py=0;
+  canvas.addEventListener('contextmenu', e=> e.preventDefault());
+  canvas.addEventListener('pointerdown', e=>{
+    if (e.button === 2 || e.shiftKey){ panning = true; canvas.style.cursor = 'move'; }
+    else { dragging = true; canvas.style.cursor = 'grabbing'; }
+    px=e.clientX; py=e.clientY;
+  });
+  window.addEventListener('pointerup', ()=>{ dragging=false; panning=false; canvas.style.cursor='grab'; });
+  window.addEventListener('pointermove', e=>{
+    if (panning){
+      panCamera(e.clientX-px, e.clientY-py);
+      px = e.clientX; py = e.clientY;
+      return;
+    }
+    if (!dragging) return;
+    theta -= (e.clientX-px)*0.006;
+    phi = Math.min(Math.max(phi - (e.clientY-py)*0.006, 0.2), Math.PI-0.2);
+    px = e.clientX; py = e.clientY; updateCam();
+  });
+  canvas.addEventListener('wheel', e=>{
+    e.preventDefault();
+    if (e.shiftKey){
+      // Shift+scroll pans the view up/down instead of zooming, for fine vertical framing.
+      panCamera(0, -e.deltaY*0.5);
+      return;
+    }
+    radius = Math.min(Math.max(radius + e.deltaY*0.02, 8), 60);
+    updateCam();
+  }, { passive:false });
+  resize(); updateCam();
+  window.addEventListener('resize', resize);
+  // Direct, guaranteed way to scroll the framing up/down -- more discoverable than the
+  // shift+drag/shift+scroll pan gestures, and handy when zoomed in on a single flask.
+  window.onPanSlider = function(value){
+    target.y = BASE_TARGET_Y - parseFloat(value);
+    updateCam();
+  };
+  window.onPanSliderX = function(value){
+    target.x = BASE_TARGET_X + parseFloat(value);
+    updateCam();
+  };
+
+  let t = 0, running = false, timer = null;
+  const chart = new Chart(document.getElementById('volChart'), {
+    type:'line',
+    data:{ datasets: rigs.map(r => ({
+      label: r.preset.label + ' (' + r.preset.conc.toFixed(1) + ' mol/dm\u00b3)', data: r.dataArr,
+      borderColor: r.preset.color, backgroundColor:'transparent',
+      borderWidth:2, pointRadius:0, tension:0.25
+    })) },
+    options:{
+      responsive:true, maintainAspectRatio:false, animation:false,
+      plugins:{ legend:{ display:true, labels:{ color:'#ccc', boxWidth:12, font:{size:11} } } },
+      scales:{
+        x:{ type:'linear', min:0, max:140, title:{ display:true, text:'Time (s)', color:'#9fffb0' }, ticks:{ color:'#9fffb0' }, grid:{ color:'#1a1a1a' } },
+        y:{ min:0, max:56,
+            title:{ display:true, text:'Volume of CO\u2082 evolved (cm\u00b3)', color:'#39FF14' },
+            ticks:{ color:'#39FF14' }, grid:{ color:'#1a1a1a' } }
+      }
+    }
+  });
+
+  const maxTravel = 2.35;
+  function updateRigDisplay(rig, V){
+    const frac = V / rig.preset.Vmax;
+    const travelFrac = V / SCALE_MAX_CC; // plunger position uses the SHARED scale, so the three
+                                          // syringes can be compared directly on one ruler
+    rig.plungerGroup.position.x = 3.9 + travelFrac*maxTravel;
+    const len = Math.max(0.02, (rig.plungerGroup.position.x - 0.15) - 3.63);
+    rig.gasFill.scale.x = len; rig.gasFill.position.x = 3.63 + len/2;
+    rig.granules.forEach(g => g.scale.setScalar(Math.max(0.65, 1 - 0.35*frac))); // marble is in
+      // excess, so chips shrink only modestly -- plenty is left over when the acid runs out
+    // As HCl (the limiting reagent) is consumed, the solution fades toward the same pale
+    // shade in every flask -- by completion, all three should look the same colour.
+    rig.liquid.material.color.copy(rig.liquidStartColor).lerp(END_LIQUID_COLOR, frac);
+    rig.liquid.material.opacity = rig.liquidStartOpacity + (END_LIQUID_OPACITY - rig.liquidStartOpacity)*frac;
+    document.getElementById('volOut-'+rig.preset.key).textContent = V.toFixed(1);
+    if (frac > 0.995) rig.done = true;
+  }
+
+  function tick(){
+    t += 0.5;
+    let allDone = true;
+    rigs.forEach(rig=>{
+      const V = rig.preset.Vmax * (1 - Math.exp(-K*t));
+      rig.dataArr.push({x:t,y:V});
+      updateRigDisplay(rig, V);
+      if (!rig.done) allDone = false;
+    });
+    if (t + 15 > chart.options.scales.x.max){
+      chart.options.scales.x.max = Math.min(300, Math.ceil((t+40)/20)*20);
+    }
+    chart.update();
+    document.getElementById('timeOut').textContent = t.toFixed(1);
+    if (allDone || t > 300){
+      stopRun();
+      document.getElementById('playLabel').textContent = 'Reaction complete';
+    }
+  }
+  window.toggleRun = function(){ running ? stopRun() : startRun(); };
+  function startRun(){
+    running = true;
+    document.getElementById('playLabel').textContent = 'Pause';
+    document.querySelector('#playBtn i').className = 'ti ti-player-pause';
+    timer = setInterval(tick, 120);
+  }
+  function stopRun(){
+    running = false;
+    document.getElementById('playLabel').textContent = 'Resume';
+    document.querySelector('#playBtn i').className = 'ti ti-player-play';
+    if (timer) clearInterval(timer);
+  }
+  window.resetSim = function(){
+    stopRun();
+    t = 0;
+    chart.options.scales.x.max = 140;
+    document.getElementById('timeOut').textContent = '0.0';
+    rigs.forEach(rig=>{
+      rig.done = false;
+      rig.dataArr.length = 0; rig.dataArr.push({x:0,y:0});
+      updateRigDisplay(rig, 0);
+      rig.granules.forEach(g => g.scale.setScalar(1));
+      rig.bubbles.forEach(b => { b.userData.dying = false; rig.spawnBubble(b, 1); b.position.y = 0.1+Math.random()*1.3; });
+    });
+    chart.update();
+    document.getElementById('playLabel').textContent = 'Start all reactions';
+  };
+
+  function maybeRespawn(b, ceiling, rateFrac, spawnFn, mult, canSpawn){
+    if (b.position.y > ceiling && !b.userData.dying){
+      if (canSpawn && Math.random() < Math.min(1, Math.max(rateFrac, 0.025)*mult)){
+        spawnFn(b, rateFrac);
+        return;
+      } else {
+        b.userData.dying = true;
+        b.userData.dyingStart = performance.now();
+        b.userData.dyingScale = b.scale.x;
+      }
+    }
+    if (b.userData.dying){
+      const age = (performance.now() - b.userData.dyingStart) / 1000;
+      const s = Math.max(0, b.userData.dyingScale * (1 - age/0.6));
+      b.scale.setScalar(s);
+      if (s <= 0.0005){
+        b.scale.setScalar(0.0001);
+        if (canSpawn) spawnFn(b, rateFrac);
+      }
+    }
+  }
+
+  let last = performance.now();
+  function animate(){
+    requestAnimationFrame(animate);
+    const now = performance.now();
+    const delta = (now-last)/1000; last = now;
+    rigs.forEach(rig=>{
+      if (!running && !rig.done) return;
+      const rateFrac = Math.max(0, Math.exp(-K*t));
+      const mult = rig.preset.bubbleRateMult;
+      const canSpawn = running && !rig.done;
+      rig.bubbles.forEach(b=>{
+        b.position.y += b.userData.speed*delta;
+        const age = (now - b.userData.spawnTime)/1000;
+        b.position.x = b.userData.baseX + Math.sin(age*b.userData.wobbleFreq + b.userData.phase)*b.userData.wobble;
+        b.position.z = b.userData.baseZ + Math.cos(age*b.userData.wobbleFreq*0.8 + b.userData.phase)*b.userData.wobble;
+        if (b.scale.x > 0.0005 && !b.userData.dying) b.scale.setScalar(b.userData.baseScale*Math.min(1, age/0.22));
+        if (b.position.y >= SURFACE_Y) b.scale.setScalar(0.0001);
+        maybeRespawn(b, SURFACE_Y, rateFrac, rig.spawnBubble, mult, canSpawn);
+      });
+    });
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  // ===================== Collision-frequency close-up (plain 2D canvas, not three.js) =====================
+  // A conceptual side-by-side illustration, independent of the timed reaction above: it just
+  // keeps animating whenever the panel is visible, showing how many more HCl particles are
+  // packed in near the marble surface -- and therefore how much more often they collide with
+  // it -- at 2.0 mol/dm3 compared with 0.5 mol/dm3.
+  function setupCollisionCanvas(id, particleCount){
+    const cvs = document.getElementById(id);
+    const ctx = cvs.getContext('2d');
+    const W = cvs.width, H = cvs.height;
+    const marbleY = H - 34, marbleR = 15;
+    const marbles = [];
+    const marbleCount = 5;
+    for (let i=0;i<marbleCount;i++){
+      const x = (W/(marbleCount+1)) * (i+1);
+      marbles.push({x, y: marbleY});
+    }
+    const particles = [];
+    for (let i=0;i<particleCount;i++){
+      particles.push({
+        x: Math.random()*W, y: Math.random()*(H-70),
+        vx: (Math.random()-0.5)*36, vy: 16+Math.random()*26,
+        r: 3.4 + Math.random()*1.6
+      });
+    }
+    const flashes = [];
+    const BASE_SPEED_MIN = 16, BASE_SPEED_MAX = 42; // same range particles are spawned with
+    function step(dt){
+      particles.forEach(p=>{
+        p.x += p.vx*dt; p.y += p.vy*dt;
+        if (p.x < p.r){ p.x=p.r; p.vx*=-1; }
+        if (p.x > W-p.r){ p.x=W-p.r; p.vx*=-1; }
+        if (p.y < p.r){ p.y=p.r; p.vy*=-1; }
+        let collided = false;
+        for (const m of marbles){
+          const dx = p.x-m.x, dy = p.y-m.y;
+          if (Math.sqrt(dx*dx+dy*dy) < marbleR+p.r){
+            const dist = Math.max(1, Math.sqrt(dx*dx+dy*dy));
+            p.x = m.x + (dx/dist)*(marbleR+p.r);
+            p.y = m.y + (dy/dist)*(marbleR+p.r);
+            // Bounce away at a freshly-chosen speed within the original range, rather than
+            // building on the incoming velocity -- that's what was causing particles to
+            // pick up speed with every collision and run away over a long session.
+            const bounceSpeed = BASE_SPEED_MIN + Math.random()*(BASE_SPEED_MAX-BASE_SPEED_MIN);
+            p.vx = (dx/dist)*bounceSpeed*0.7 + (Math.random()-0.5)*14;
+            p.vy = -Math.abs((dy/dist)*bounceSpeed*0.7) - 8;
+            collided = true;
+            break;
+          }
+        }
+        // Defensive clamp: whatever the cause, never let a particle's speed exceed the
+        // intended range, so the panel stays at a constant, calm pace indefinitely.
+        const sp = Math.sqrt(p.vx*p.vx + p.vy*p.vy);
+        if (sp > BASE_SPEED_MAX){ const sc = BASE_SPEED_MAX/sp; p.vx *= sc; p.vy *= sc; }
+        if (collided) flashes.push({x:p.x, y:p.y, age:0});
+        if (p.y > H+10){ p.y = -10; p.x = Math.random()*W; p.vy = 16+Math.random()*26; }
+      });
+      for (let i=flashes.length-1;i>=0;i--){
+        flashes[i].age += dt;
+        if (flashes[i].age > 0.35) flashes.splice(i,1);
+      }
+    }
+    function draw(){
+      ctx.fillStyle = '#000'; ctx.fillRect(0,0,W,H);
+      // marble row
+      marbles.forEach(m=>{
+        const grad = ctx.createRadialGradient(m.x-4,m.y-4,2,m.x,m.y,marbleR);
+        grad.addColorStop(0,'#c9c9c9'); grad.addColorStop(1,'#6b6b6b');
+        ctx.fillStyle = grad;
+        ctx.beginPath(); ctx.arc(m.x,m.y,marbleR,0,Math.PI*2); ctx.fill();
+      });
+      // flashes
+      flashes.forEach(f=>{
+        const p = f.age/0.35;
+        ctx.strokeStyle = 'rgba(57,255,20,' + (1-p) + ')';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(f.x,f.y, 4+p*10, 0, Math.PI*2); ctx.stroke();
+      });
+      // particles
+      particles.forEach(p=>{
+        const grad = ctx.createRadialGradient(p.x-1,p.y-1,0.5,p.x,p.y,p.r);
+        grad.addColorStop(0,'#ffe9a8'); grad.addColorStop(1,'#ff9d1a');
+        ctx.fillStyle = grad;
+        ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+      });
+    }
+    return { step, draw };
+  }
+
+  const collisionCanvases = {
+    dilute: setupCollisionCanvas('collisionDilute', Math.round(12*presets.dilute.conc)),
+    medium: setupCollisionCanvas('collisionMedium', Math.round(12*presets.medium.conc)),
+    concentrated: setupCollisionCanvas('collisionConcentrated', Math.round(12*presets.concentrated.conc))
+  };
+  const overlayEls = {
+    dilute: document.getElementById('collisionOverlay-dilute'),
+    medium: document.getElementById('collisionOverlay-medium'),
+    concentrated: document.getElementById('collisionOverlay-concentrated')
+  };
+  // Local point (above each flask's concentration label) whose projected screen position
+  // anchors that flask's collision-close-up overlay, so it stays "pinned" above the flask
+  // as the camera is dragged or zoomed.
+  const anchorLocal = new THREE.Vector3(0, 5.5, 0.3);
+  function positionOverlay(rig, el){
+    const world = rig.rigRoot.localToWorld(anchorLocal.clone());
+    const ndc = world.project(camera);
+    if (ndc.z >= 1){ el.style.display = 'none'; return; }
+    const x = (ndc.x*0.5+0.5) * wrap.clientWidth;
+    const y = (1-(ndc.y*0.5+0.5)) * wrap.clientHeight;
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    el.style.display = 'block';
+  }
+
+  let collisionVisible = false, collisionLast = null;
+  function collisionLoop(now){
+    if (!collisionVisible) return;
+    if (collisionLast === null) collisionLast = now;
+    const dt = Math.min(0.05, (now-collisionLast)/1000);
+    collisionLast = now;
+    rigs.forEach(rig=>{
+      const cc = collisionCanvases[rig.preset.key];
+      cc.step(dt); cc.draw();
+      positionOverlay(rig, overlayEls[rig.preset.key]);
+    });
+    requestAnimationFrame(collisionLoop);
+  }
+  window.toggleCollisionPanel = function(){
+    collisionVisible = !collisionVisible;
+    Object.values(overlayEls).forEach(el => { el.style.display = collisionVisible ? 'block' : 'none'; });
+    document.getElementById('collisionBtnLabel').textContent = collisionVisible ? 'Hide collision close-up' : 'Show collision close-up';
+    if (collisionVisible){ collisionLast = null; requestAnimationFrame(collisionLoop); }
+  };
+})();
+</script>
+
+<style id="rateChallengeStyle">
+.rate-challenge{max-width:900px;margin:22px auto;background:#050505;border:1px solid #2b2b2b;border-radius:12px;padding:18px 16px;font-family:-apple-system,'Segoe UI',sans-serif;color:#eee}.rate-challenge h2{margin:0 0 6px;color:#39FFE8;font-size:18px}.rate-challenge .intro{color:#aaa;font-size:13px;margin:0 0 14px}.rc-q{border-top:1px solid #222;padding:14px 0}.rc-q:first-of-type{border-top:0}.rc-prompt{line-height:1.45;margin-bottom:9px}.rc-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.rc-row input{background:#0b0b0b;color:#fff;border:1px solid #555;border-radius:6px;padding:9px 10px;width:150px;font-size:14px}.rc-row button{background:#0a0a0a;color:#39FFE8;border:1px solid #39FFE8;border-radius:6px;padding:9px 12px;cursor:pointer}.rc-row button.hint{color:#FFD23C;border-color:#FFD23C}.rc-feedback{min-height:20px;margin-top:8px;font-size:13px}.rc-hint{display:none;color:#FFD23C;margin-top:7px;font-size:12px}.rc-unit{color:#bbb;font-size:13px}</style><section class="rate-challenge"><h2>Student Challenge</h2><p class="intro">Calculate before revealing help. Enter a numerical answer; reasonable rounding is accepted.</p><div class="rc-q" data-answer="0.7121164083" data-tol="0.03"><div class="rc-prompt">For the 1.0 mol dm⁻³ HCl curve, calculate the average rate of CO₂ production from 0 to 20 s. Enter a positive value.</div><div class="rc-row"><input type="number" step="any" inputmode="decimal" aria-label="Answer for challenge 1"><span class="rc-unit">cm³ s⁻¹</span><button type="button" class="check">Check answer</button><button type="button" class="hint">Hint</button></div><div class="rc-feedback" aria-live="polite"></div><div class="rc-hint">Use ΔV/Δt.</div></div><div class="rc-q" data-answer="1.739384872" data-tol="0.05"><div class="rc-prompt">For the 2.0 mol dm⁻³ HCl curve, calculate the average rate from 0 to 10 s.</div><div class="rc-row"><input type="number" step="any" inputmode="decimal" aria-label="Answer for challenge 2"><span class="rc-unit">cm³ s⁻¹</span><button type="button" class="check">Check answer</button><button type="button" class="hint">Hint</button></div><div class="rc-feedback" aria-live="polite"></div><div class="rc-hint">Read/calculate V at 10 s, then divide by 10 s.</div></div></section><script>(function(){document.querySelectorAll('.rate-challenge .rc-q').forEach(function(q){var input=q.querySelector('input'),fb=q.querySelector('.rc-feedback'),hint=q.querySelector('.rc-hint');q.querySelector('.check').addEventListener('click',function(){var v=Number(input.value),a=Number(q.dataset.answer),t=Number(q.dataset.tol);if(!Number.isFinite(v)){fb.textContent='Enter a numerical value first.';fb.style.color='#FFD23C';return;}if(Math.abs(v-a)<=t){fb.textContent='Correct — your calculation is within the accepted rounding range.';fb.style.color='#39FF14';}else{fb.textContent='Not yet. Check the values, units and gradient calculation, then try again.';fb.style.color='#FF7CD4';}});q.querySelector('.hint').addEventListener('click',function(){var show=hint.style.display!=='block';hint.style.display=show?'block':'none';this.textContent=show?'Hide hint':'Hint';});});})();</script>

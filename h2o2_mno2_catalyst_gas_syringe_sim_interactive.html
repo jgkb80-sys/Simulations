@@ -1,0 +1,590 @@
+<h2 class="sr-only">3D simulation of two flasks of hydrogen peroxide solution, one with no catalyst and one with manganese dioxide catalyst added, each flask connected by a tube to its own gas syringe that collects the oxygen gas produced as the peroxide decomposes. Both flasks start with the same concentration and volume of hydrogen peroxide at the same temperature, so the presence of the catalyst is the only variable — both eventually produce the same total volume of oxygen, but the catalyzed flask reaches that volume dramatically faster while the uncatalyzed flask barely reacts at all within the same time. A toggle lets the catalyst be added as coarse granules or as a fine powder, showing that increasing the catalyst's surface area speeds the reaction up further still.</h2>
+<div style="background:#000; border-radius:12px; padding:20px 16px; font-family:var(--font-sans, sans-serif);">
+
+  <div style="text-align:center; color:#FFFA1A; font-size:18px; font-weight:600; letter-spacing:0.3px; margin-bottom:4px; text-shadow:0 0 6px rgba(255,250,26,0.85), 0 0 16px rgba(255,250,26,0.5);">
+    2H<sub>2</sub>O<sub>2</sub>(aq) &rarr; 2H<sub>2</sub>O(l) + O<sub>2</sub>(g)
+  </div>
+  <div style="text-align:center; color:#888; font-size:12px; margin-bottom:14px;">MnO&#8322; catalyst is added only in the right-hand flask</div>
+
+  <div id="stageWrap" style="position:relative; width:100%; height:460px; border-radius:10px; overflow:hidden; background:#000;">
+    <canvas id="three-canvas" style="width:100%; height:100%; display:block; cursor:grab;"></canvas>
+    <div style="position:absolute; bottom:8px; right:12px; font-size:11px; color:#5a5a5a; font-family:sans-serif; text-align:right;">drag to rotate &middot; scroll to zoom</div>
+
+    <div style="position:absolute; left:10px; top:50%; transform:translateY(-50%); z-index:6; display:flex; flex-direction:column; align-items:center; gap:4px; background:rgba(0,0,0,0.45); padding:8px 4px; border-radius:8px;">
+      <span style="color:#39FFE8; font-size:13px; line-height:1;">&uarr;</span>
+      <input type="range" id="panSlider" min="-4" max="4" step="0.05" value="0"
+        style="width:150px; transform:rotate(-90deg); accent-color:#39FFE8; cursor:pointer;"
+        oninput="onPanSlider(this.value)" aria-label="Scroll the view up or down">
+      <span style="color:#39FFE8; font-size:13px; line-height:1;">&darr;</span>
+    </div>
+
+    <div style="position:absolute; left:50%; bottom:10px; transform:translateX(-50%); z-index:6; display:flex; align-items:center; gap:6px; background:rgba(0,0,0,0.45); padding:4px 8px; border-radius:8px;">
+      <span style="color:#39FFE8; font-size:13px; line-height:1;">&larr;</span>
+      <input type="range" id="panSliderX" min="-8" max="8" step="0.05" value="0"
+        style="width:150px; accent-color:#39FFE8; cursor:pointer;"
+        oninput="onPanSliderX(this.value)" aria-label="Scroll the view left or right">
+      <span style="color:#39FFE8; font-size:13px; line-height:1;">&rarr;</span>
+    </div>
+  </div>
+  <p style="color:#666; font-size:11px; margin:6px 2px 0;">Use the &uarr;&darr; slider on the left and the &larr;&rarr; slider at the bottom to scroll the view.</p>
+
+  <style>
+    button.simbtn { background:#0a0a0a; border:1px solid #39FFE8; color:#39FFE8; border-radius:6px; padding:8px 16px; font-size:13px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+    button.simbtn:hover { background:#102; }
+    button.simbtn.alt { border-color:#FF7CD4; color:#FF7CD4; }
+    button.simbtn.alt:hover { background:#210016; }
+    button.formbtn { background:#0a0a0a; border:1px solid #555; color:#999; border-radius:6px; padding:6px 14px; font-size:12.5px; cursor:pointer; }
+    button.formbtn.active { border-color:#FFD23C; color:#FFD23C; box-shadow:0 0 8px rgba(255,210,60,0.4); }
+  </style>
+
+  <div style="display:flex; align-items:center; gap:12px; margin:14px 0 10px; flex-wrap:wrap;">
+    <button class="simbtn" id="playBtn" onclick="toggleRun()"><i class="ti ti-player-play" aria-hidden="true"></i><span id="playLabel">Start both reactions</span></button>
+    <button class="simbtn" onclick="resetSim()"><i class="ti ti-refresh" aria-hidden="true"></i>Reset all</button>
+
+    <span style="color:#9fffb0; font-size:13px;">Time: <span id="timeOut">0.0</span> s</span>
+  </div>
+
+  <div style="display:flex; align-items:center; gap:10px; margin:0 0 10px; flex-wrap:wrap;">
+    <span style="color:#FFD23C; font-size:13px;">Catalyst form:</span>
+    <button class="formbtn active" id="formBtn-granules" onclick="setCatalystForm('granules')">Granules</button>
+    <button class="formbtn" id="formBtn-powder" onclick="setCatalystForm('powder')">Powder</button>
+    <span style="color:#666; font-size:11.5px;">(changes the surface area of the MnO&#8322; catalyst &mdash; restarts both flasks)</span>
+  </div>
+
+  <div style="display:flex; align-items:center; gap:18px; margin:2px 0 6px; flex-wrap:wrap; font-size:13px;">
+    <span style="color:#39FFE8;">&#9679; No catalyst: <span id="volOut-no_catalyst">0.0</span> cm&sup3;</span>
+    <span style="color:#FFD23C;">&#9679; With MnO&#8322; catalyst: <span id="volOut-catalyst">0.0</span> cm&sup3;</span>
+  </div>
+
+  <div style="position:relative; width:100%; height:260px; margin-top:10px;">
+    <canvas id="volChart" role="img" aria-label="Line chart of volume of oxygen gas evolved in cubic centimeters versus time in seconds, comparing a flask with no catalyst to a flask with manganese dioxide catalyst. Both curves would level off at the same final volume since the amount of hydrogen peroxide is identical in each flask, but the catalyzed curve rises so steeply it reaches that plateau within roughly a minute, while the uncatalyzed curve stays close to zero for the entire length of the graph, barely rising at all.">The catalyzed flask's curve shoots up almost immediately and flattens out near the top of the graph within about a minute. The uncatalyzed flask's curve stays almost flat along the bottom for the whole graph, since without a catalyst the reaction is far too slow to produce a noticeable volume of gas in this time.</canvas>
+  </div>
+
+  <p id="footnote" style="color:#888; font-size:12px; margin-top:10px; line-height:1.5;">Both flasks start with the same concentration and volume of hydrogen peroxide at the same temperature &mdash; the only difference is whether MnO&#8322; catalyst has been added. Because the amount of H&#8322;O&#8322; is identical in both, they would eventually release the <em>same total volume</em> of oxygen &mdash; but without a catalyst that takes an extremely long time, so the uncatalyzed curve barely moves within this simulation. Switching the catalyst between granules and powder changes how much surface area is exposed to the peroxide: more surface area means more frequent effective collisions and a faster rate, even though the catalyst's activation energy is exactly the same either way &mdash; MnO&#8322; opens up a route with a much lower activation energy, which is why far more collisions succeed at the same temperature, while switching between granules and powder does <em>not</em> change that; surface area changes the <em>rate</em>, not the <em>activation energy</em>.</p>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+(function(){
+  if (typeof THREE === 'undefined' || typeof Chart === 'undefined') {
+    document.body.innerHTML = '<div style="color:#ff5c5c;background:#1a0000;border:1px solid #ff5c5c;border-radius:8px;padding:20px;max-width:600px;margin:60px auto;font-family:sans-serif;">Could not load required libraries from the CDN. Try opening this in a regular browser tab.</div>';
+    return;
+  }
+  const canvas = document.getElementById('three-canvas');
+  const wrap = canvas.parentElement;
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.shadowMap.enabled = true;
+
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x000000, 0.018);
+  const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 120);
+
+  function resize(){
+    const w = wrap.clientWidth, h = wrap.clientHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+
+  scene.add(new THREE.AmbientLight(0x223344, 0.85));
+  const key = new THREE.DirectionalLight(0xffffff, 1.3);
+  key.position.set(5, 10, 7); key.castShadow = true; key.shadow.mapSize.set(1024,1024);
+  scene.add(key);
+  const cyanLight = new THREE.PointLight(0x39FFE8, 1.1, 40);
+  cyanLight.position.set(-7, 5, 6); scene.add(cyanLight);
+  const amberLight = new THREE.PointLight(0xFFD23C, 1.3, 40);
+  amberLight.position.set(7, 4, 6); scene.add(amberLight);
+
+  // No floor plane -- the apparatus floats in plain black space rather than sitting on
+  // a visible ground surface.
+
+  // ---------- See-through bubbles with a bright Fresnel rim and a fade uniform ----------
+  function makeBubbleMaterial(){
+    return new THREE.ShaderMaterial({
+      uniforms: { color: { value: new THREE.Color(0xcdfeff) }, fade: { value: 1.0 } },
+      vertexShader: `
+        varying vec3 vNormal;
+        varying vec3 vViewDir;
+        void main(){
+          vNormal = normalize(normalMatrix * normal);
+          vec4 mvPosition = modelViewMatrix * vec4(position,1.0);
+          vViewDir = normalize(-mvPosition.xyz);
+          gl_Position = projectionMatrix * mvPosition;
+        }`,
+      fragmentShader: `
+        uniform vec3 color;
+        uniform float fade;
+        varying vec3 vNormal;
+        varying vec3 vViewDir;
+        void main(){
+          vec3 n = normalize(vNormal);
+          vec3 v = normalize(vViewDir);
+          float fresnel = pow(1.0 - max(dot(n, v), 0.0), 2.4);
+          vec3 lightDir = normalize(vec3(0.4, 0.9, 0.35));
+          float spec = pow(max(dot(reflect(-lightDir, n), v), 0.0), 70.0);
+          vec3 rim = mix(color, vec3(1.0), 0.35);
+          vec3 finalColor = mix(color*0.55, rim, fresnel) + spec*0.85;
+          float alpha = mix(0.045, 0.72, fresnel) * fade + spec*0.55*fade;
+          gl_FragColor = vec4(finalColor, clamp(alpha, 0.0, 1.0));
+        }`,
+      transparent: true, depthWrite:false, side: THREE.DoubleSide
+    });
+  }
+
+  function makeLabel(lines, sizePx){
+    sizePx = sizePx || 40;
+    const c = document.createElement('canvas'); c.width = 320; c.height = 140;
+    const ctx = c.getContext('2d');
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = 'bold ' + sizePx + 'px sans-serif';
+    ctx.fillStyle = lines[0].color;
+    ctx.fillText(lines[0].text, 160, 42);
+    ctx.font = (sizePx-6) + 'px sans-serif';
+    ctx.fillStyle = lines[1].color;
+    ctx.fillText(lines[1].text, 160, 96);
+    const tex = new THREE.CanvasTexture(c);
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent:true, depthTest:false }));
+    spr.scale.set(1.5,0.66,1);
+    return spr;
+  }
+
+  // Flat, plain neon-yellow label floating above each flask -- no shadow/glow.
+  const LABEL_COLOR = '#FFFA1A';
+  function makeGlowLabel(lines){
+    const c = document.createElement('canvas'); c.width = 420; c.height = 180;
+    const ctx = c.getContext('2d');
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = LABEL_COLOR;
+    ctx.font = 'bold 40px sans-serif';
+    ctx.fillText(lines[0].text, 210, 56);
+    ctx.font = 'bold 34px sans-serif';
+    ctx.fillText(lines[1].text, 210, 118);
+    const tex = new THREE.CanvasTexture(c);
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent:true, depthTest:false }));
+    spr.scale.set(1.95,0.84,1);
+    return spr;
+  }
+
+  // Both flasks contain the SAME concentration and volume of H2O2 at the SAME temperature,
+  // so they would release the same total volume of O2 (shared VMAX). Whether -- and how --
+  // a catalyst is present is the only variable, modelled as a rate constant K per condition:
+  // a catalyst dramatically increases K (lower activation energy), and a larger catalyst
+  // surface area (powder vs granules) increases it further still (more frequent contact),
+  // without changing VMAX or the activation energy itself.
+  const VMAX = 40;              // cm3 of O2 -- identical for both flasks, if given enough time
+  const SCALE_MAX_CC = 48;      // shared syringe ruler
+  const SURFACE_Y = 1.5;        // liquid surface height (just below liquidPts' true top of 1.55)
+  const LIQUID_COLOR = 0xeaf6ff;
+  const LIQUID_OPACITY = 0.15;
+
+  const CATALYST_FORMS = {
+    granules: { k:0.09, bubbleRateMult:1.0, bubbleSpeedMult:1.0, bubbleSizeMult:1.0, granuleCount:4,  granuleSizeRange:[0.11,0.15] },
+    powder:   { k:0.30, bubbleRateMult:2.4, bubbleSpeedMult:1.4, bubbleSizeMult:1.15, granuleCount:20, granuleSizeRange:[0.028,0.045] }
+  };
+  let catalystForm = 'granules';
+
+  const presets = {
+    no_catalyst: { key:'no_catalyst', label:'No Catalyst', xPos:-5.5, color:'#39FFE8', hasCatalyst:false,
+                   k:0.0015, bubbleRateMult:0.06, bubbleSpeedMult:0.5, bubbleSizeMult:0.6 },
+    catalyst:    { key:'catalyst',    label:'MnO\u2082 Catalyst', xPos:5.5,  color:'#FFD23C', hasCatalyst:true,
+                   k:CATALYST_FORMS.granules.k, bubbleRateMult:CATALYST_FORMS.granules.bubbleRateMult,
+                   bubbleSpeedMult:CATALYST_FORMS.granules.bubbleSpeedMult, bubbleSizeMult:CATALYST_FORMS.granules.bubbleSizeMult }
+  };
+  const RIG_SCALE = 0.85;
+
+  const mnO2Mat = new THREE.MeshStandardMaterial({ color:0x2b241f, metalness:0.15, roughness:0.85 });
+
+  function addCatalystGranules(rig, form){
+    const cfg = CATALYST_FORMS[form];
+    rig.granules.forEach(g => rig.flaskGroup.remove(g));
+    rig.granules = [];
+    for (let i=0;i<cfg.granuleCount;i++){
+      const r = cfg.granuleSizeRange[0] + Math.random()*(cfg.granuleSizeRange[1]-cfg.granuleSizeRange[0]);
+      const geo = new THREE.IcosahedronGeometry(r, 0);
+      const posAttr = geo.attributes.position;
+      for (let v=0; v<posAttr.count; v++){
+        posAttr.setXYZ(v,
+          posAttr.getX(v) * (0.85+Math.random()*0.3),
+          posAttr.getY(v) * (0.85+Math.random()*0.3),
+          posAttr.getZ(v) * (0.85+Math.random()*0.3));
+      }
+      geo.computeVertexNormals();
+      const m = new THREE.Mesh(geo, mnO2Mat);
+      const ang = Math.random()*Math.PI*2, rad = Math.random()*0.4;
+      m.position.set(Math.cos(ang)*rad, 0.06+Math.random()*0.12, Math.sin(ang)*rad);
+      m.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
+      m.renderOrder = 3;
+      rig.flaskGroup.add(m);
+      rig.granules.push(m);
+    }
+  }
+
+  function buildRig(preset){
+    const rig = { preset, done:false, dataArr:[{x:0,y:0}] };
+    const rigRoot = new THREE.Group();
+    rigRoot.position.set(preset.xPos, 0, 0);
+    rigRoot.scale.setScalar(RIG_SCALE);
+    scene.add(rigRoot);
+    rig.rigRoot = rigRoot;
+
+    // ---- retort stand ----
+    const standMat = new THREE.MeshStandardMaterial({ color:0x666666, metalness:0.7, roughness:0.35 });
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,5,16), standMat);
+    pole.position.set(-2.6,2.5,0); pole.castShadow = true; rigRoot.add(pole);
+    const base = new THREE.Mesh(new THREE.BoxGeometry(1.0,0.12,1.0), standMat);
+    base.position.set(-2.6,0.06,0); base.castShadow = true; base.receiveShadow = true; rigRoot.add(base);
+    const clampArm = new THREE.Mesh(new THREE.BoxGeometry(2.8,0.08,0.08), standMat);
+    clampArm.position.set(-1.3,3.15,0); rigRoot.add(clampArm);
+    const clampRing = new THREE.Mesh(new THREE.TorusGeometry(0.5,0.05,10,28), standMat);
+    clampRing.position.set(0,3.15,0); clampRing.rotation.x = Math.PI/2; rigRoot.add(clampRing);
+
+    // ---- flask ----
+    const flaskGroup = new THREE.Group(); rigRoot.add(flaskGroup);
+    rig.flaskGroup = flaskGroup;
+    const flaskPts = [
+      [0,0],[1.55,0.05],[1.6,0.15],[1.5,0.45],[1.25,1.0],[0.9,1.6],
+      [0.58,2.0],[0.44,2.05],[0.44,3.1],[0.5,3.18],[0.47,3.22]
+    ].map(p => new THREE.Vector2(p[0], p[1]));
+    const flask = new THREE.Mesh(new THREE.LatheGeometry(flaskPts, 40), new THREE.MeshPhysicalMaterial({
+      color:0xbfe9ff, transparent:true, opacity:0.22, roughness:0.05, metalness:0,
+      transmission:0.55, thickness:0.6, ior:1.4, clearcoat:1, clearcoatRoughness:0.08, side:THREE.DoubleSide, depthWrite:false
+    }));
+    flask.renderOrder = 2; flaskGroup.add(flask);
+
+    const liquidPts = [[0,0],[1.5,0.05],[1.55,0.15],[1.45,0.4],[1.2,0.95],[0.85,1.55]].map(p => new THREE.Vector2(p[0], p[1]));
+    const liquid = new THREE.Mesh(new THREE.LatheGeometry(liquidPts, 32), new THREE.MeshPhysicalMaterial({
+      color:LIQUID_COLOR, transparent:true, opacity:LIQUID_OPACITY, roughness:0.15, transmission:0.25, side:THREE.DoubleSide, depthWrite:false
+    }));
+    liquid.renderOrder = 1; flaskGroup.add(liquid);
+    rig.liquid = liquid;
+
+    // ---- MnO2 catalyst granules -- only in the catalyst flask; none at all in the control ----
+    rig.granules = [];
+    if (preset.hasCatalyst) addCatalystGranules(rig, catalystForm);
+
+    // ---- bubbles rising through the liquid, popping right at the surface ----
+    const bubbleMat = makeBubbleMaterial();
+    function spawnBubble(m, rateFrac){
+      rateFrac = (rateFrac===undefined) ? 1 : rateFrac;
+      let baseX, baseY, baseZ;
+      if (rig.granules.length){
+        const g = rig.granules[Math.floor(Math.random()*rig.granules.length)];
+        const ang = Math.random()*Math.PI*2;
+        baseX = g.position.x + Math.cos(ang)*0.05; baseY = g.position.y + 0.05; baseZ = g.position.z + Math.sin(ang)*0.05;
+      } else {
+        const ang = Math.random()*Math.PI*2, rad = Math.random()*0.35;
+        baseX = Math.cos(ang)*rad; baseY = 0.06; baseZ = Math.sin(ang)*rad;
+      }
+      m.position.set(baseX, baseY, baseZ);
+      m.userData.baseX = m.position.x; m.userData.baseZ = m.position.z;
+      m.userData.speed = (0.3 + Math.random()*0.5) * (0.55+0.45*rateFrac) * rig.preset.bubbleSpeedMult;
+      m.userData.wobble = 0.04 + Math.random()*0.04;
+      m.userData.wobbleFreq = 2 + Math.random()*2;
+      m.userData.phase = Math.random()*Math.PI*2;
+      m.userData.spawnTime = performance.now();
+      m.userData.baseScale = (1.1 + Math.random()*1.0) * (0.45+0.55*rateFrac) * rig.preset.bubbleSizeMult;
+      m.userData.dying = false;
+      m.scale.setScalar(0.05);
+    }
+    rig.bubbles = [];
+    const bubblePoolSize = Math.max(6, Math.round(16 * preset.bubbleRateMult));
+    for (let i=0;i<bubblePoolSize;i++){
+      const r = 0.026 + Math.random()*0.03;
+      const m = new THREE.Mesh(new THREE.SphereGeometry(r,10,10), bubbleMat);
+      m.renderOrder = 999;
+      flaskGroup.add(m);
+      spawnBubble(m, 1);
+      m.position.y = 0.1 + Math.random()*1.3;
+      rig.bubbles.push(m);
+    }
+    rig.spawnBubble = spawnBubble;
+
+    // ---- stopper + tube to syringe (no cotton plug on this apparatus) ----
+    const stopper = new THREE.Mesh(new THREE.CylinderGeometry(0.46,0.46,0.3,24),
+      new THREE.MeshStandardMaterial({ color:0x1a1a1a, roughness:0.85 }));
+    stopper.position.set(0,3.25,0); flaskGroup.add(stopper);
+
+    const glassMat = new THREE.MeshPhysicalMaterial({
+      color:0xd9fff5, transparent:true, opacity:0.3, roughness:0.05, transmission:0.5, thickness:0.4, ior:1.4, clearcoat:1, side:THREE.DoubleSide
+    });
+    const barrelGeo = new THREE.CylinderGeometry(0.55,0.55,3,32,1,true); barrelGeo.rotateZ(Math.PI/2);
+    const barrel = new THREE.Mesh(barrelGeo, glassMat);
+    barrel.position.set(5.1,2.3,0); barrel.renderOrder = 2; rigRoot.add(barrel);
+
+    const capGeo = new THREE.CylinderGeometry(0.55,0.55,0.06,32); capGeo.rotateZ(Math.PI/2);
+    const cap = new THREE.Mesh(capGeo, new THREE.MeshStandardMaterial({ color:0x222222, roughness:0.7 }));
+    cap.position.set(3.62,2.3,0); rigRoot.add(cap);
+
+    const nozzleMat = new THREE.MeshStandardMaterial({ color:0xff3cac, metalness:0.2, roughness:0.5, emissive:0x440a22, emissiveIntensity:0.5 });
+    const nozzleGeo = new THREE.CylinderGeometry(0.1,0.1,0.28,12); nozzleGeo.rotateZ(Math.PI/2);
+    const nozzle = new THREE.Mesh(nozzleGeo, nozzleMat);
+    nozzle.position.set(3.46,2.3,0); rigRoot.add(nozzle);
+
+    const tubeCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(3.32,2.3,0), new THREE.Vector3(3.02,2.32,0),
+      new THREE.Vector3(2.8,2.6,0), new THREE.Vector3(2.72,3.1,0),
+      new THREE.Vector3(2.85,3.6,0), new THREE.Vector3(1.6,4.1,0),
+      new THREE.Vector3(0,4.1,0), new THREE.Vector3(0,3.4,0)
+    ]);
+    rigRoot.add(new THREE.Mesh(new THREE.TubeGeometry(tubeCurve, 50, 0.07, 10, false), nozzleMat));
+
+    const tickMat = new THREE.MeshBasicMaterial({ color:0x39FFE8 });
+    const barrelStartX = 3.7, barrelUsableLen = 2.7;
+    for (let v=0; v<=SCALE_MAX_CC; v+=8){
+      const x = barrelStartX + (v/SCALE_MAX_CC)*barrelUsableLen;
+      const tick = new THREE.Mesh(new THREE.BoxGeometry(0.02,0.12,0.02), tickMat);
+      tick.position.set(x, 2.3+0.56, 0);
+      rigRoot.add(tick);
+      const tLabel = makeLabel([{text:String(v),color:'#39FFE8'},{text:'',color:'#000'}], 44);
+      tLabel.scale.set(0.34,0.15,1);
+      tLabel.position.set(x, 2.3+0.78, 0);
+      rigRoot.add(tLabel);
+    }
+    const unitLabel = makeLabel([{text:'cm\u00b3',color:'#39FFE8'},{text:'',color:'#000'}], 44);
+    unitLabel.scale.set(0.34,0.15,1);
+    unitLabel.position.set(barrelStartX + barrelUsableLen + 0.25, 2.3+0.78, 0);
+    rigRoot.add(unitLabel);
+
+    const legMat = new THREE.MeshStandardMaterial({ color:0x555555, metalness:0.6, roughness:0.4 });
+    const leg1 = new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,2.2,10), legMat); leg1.position.set(4.3,1.15,0); rigRoot.add(leg1);
+    const leg2 = new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,2.2,10), legMat); leg2.position.set(5.9,1.15,0); rigRoot.add(leg2);
+
+    const gasFillGeo = new THREE.CylinderGeometry(0.48,0.48,1,24,1,true); gasFillGeo.rotateZ(Math.PI/2);
+    const gasFill = new THREE.Mesh(gasFillGeo, new THREE.MeshBasicMaterial({ color:0x39ff14, transparent:true, opacity:0.28, depthWrite:false }));
+    gasFill.scale.x = 0.02; gasFill.position.set(3.63,2.3,0); rigRoot.add(gasFill);
+    rig.gasFill = gasFill;
+
+    const plungerGroup = new THREE.Group(); plungerGroup.position.set(3.9,2.3,0);
+    const sealGeo = new THREE.CylinderGeometry(0.5,0.5,0.3,32); sealGeo.rotateZ(Math.PI/2);
+    plungerGroup.add(new THREE.Mesh(sealGeo, new THREE.MeshStandardMaterial({ color:0xff3cac, metalness:0.3, roughness:0.4 })));
+    const rodGeo = new THREE.CylinderGeometry(0.07,0.07,1.3,16); rodGeo.rotateZ(Math.PI/2);
+    const rod = new THREE.Mesh(rodGeo, legMat); rod.position.set(0.78,0,0); plungerGroup.add(rod);
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.18,0.1,24), new THREE.MeshStandardMaterial({ color:0x444444, metalness:0.5, roughness:0.4 }));
+    handle.rotation.z = Math.PI/2; handle.position.set(1.45,0,0); plungerGroup.add(handle);
+    rigRoot.add(plungerGroup);
+    rig.plungerGroup = plungerGroup;
+
+    // floating label above the flask -- flat neon yellow, no glow
+    const flaskLabel = makeGlowLabel([
+      {text:preset.label},
+      {text:preset.hasCatalyst ? '' : 'H\u2082O\u2082 only'}
+    ]);
+    flaskLabel.position.set(0, 4.55, 0.4);
+    rigRoot.add(flaskLabel);
+
+    return rig;
+  }
+
+  const rigNoCatalyst = buildRig(presets.no_catalyst);
+  const rigCatalyst = buildRig(presets.catalyst);
+  const rigs = [rigNoCatalyst, rigCatalyst];
+
+  let theta = 0.25, phi = 1.15, radius = 30;
+  const BASE_TARGET_Y = 2.0;
+  const BASE_TARGET_X = 0;
+  const target = new THREE.Vector3(BASE_TARGET_X, BASE_TARGET_Y, 0);
+  function updateCam(){
+    camera.position.x = target.x + radius*Math.sin(phi)*Math.sin(theta);
+    camera.position.z = target.z + radius*Math.sin(phi)*Math.cos(theta);
+    camera.position.y = target.y + radius*Math.cos(phi);
+    camera.lookAt(target);
+  }
+  function panCamera(dxPx, dyPx){
+    const forward = new THREE.Vector3().subVectors(target, camera.position).normalize();
+    const right = new THREE.Vector3().crossVectors(forward, camera.up).normalize();
+    const up = new THREE.Vector3().crossVectors(right, forward).normalize();
+    const panScale = radius * 0.0018;
+    target.addScaledVector(right, -dxPx*panScale);
+    target.addScaledVector(up, dyPx*panScale);
+    updateCam();
+  }
+  let dragging = false, panning = false, px=0, py=0;
+  canvas.addEventListener('contextmenu', e=> e.preventDefault());
+  canvas.addEventListener('pointerdown', e=>{
+    if (e.button === 2 || e.shiftKey){ panning = true; canvas.style.cursor = 'move'; }
+    else { dragging = true; canvas.style.cursor = 'grabbing'; }
+    px=e.clientX; py=e.clientY;
+  });
+  window.addEventListener('pointerup', ()=>{ dragging=false; panning=false; canvas.style.cursor='grab'; });
+  window.addEventListener('pointermove', e=>{
+    if (panning){
+      panCamera(e.clientX-px, e.clientY-py);
+      px = e.clientX; py = e.clientY;
+      return;
+    }
+    if (!dragging) return;
+    theta -= (e.clientX-px)*0.006;
+    phi = Math.min(Math.max(phi - (e.clientY-py)*0.006, 0.2), Math.PI-0.2);
+    px = e.clientX; py = e.clientY; updateCam();
+  });
+  canvas.addEventListener('wheel', e=>{
+    e.preventDefault();
+    if (e.shiftKey){
+      panCamera(0, -e.deltaY*0.5);
+      return;
+    }
+    radius = Math.min(Math.max(radius + e.deltaY*0.02, 6), 50);
+    updateCam();
+  }, { passive:false });
+  resize(); updateCam();
+  window.addEventListener('resize', resize);
+  window.onPanSlider = function(value){
+    target.y = BASE_TARGET_Y - parseFloat(value);
+    updateCam();
+  };
+  window.onPanSliderX = function(value){
+    target.x = BASE_TARGET_X + parseFloat(value);
+    updateCam();
+  };
+
+  let t = 0, running = false, timer = null;
+  const chart = new Chart(document.getElementById('volChart'), {
+    type:'line',
+    data:{ datasets: rigs.map(r => ({
+      label: r.preset.label, data: r.dataArr,
+      borderColor: r.preset.color, backgroundColor:'transparent',
+      borderWidth:2, pointRadius:0, tension:0.25
+    })) },
+    options:{
+      responsive:true, maintainAspectRatio:false, animation:false,
+      plugins:{ legend:{ display:true, labels:{ color:'#ccc', boxWidth:12, font:{size:11} } } },
+      scales:{
+        x:{ type:'linear', min:0, max:170, title:{ display:true, text:'Time (s)', color:'#9fffb0' }, ticks:{ color:'#9fffb0' }, grid:{ color:'#1a1a1a' } },
+        y:{ min:0, max:48,
+            title:{ display:true, text:'Volume of O\u2082 evolved (cm\u00b3)', color:'#39FF14' },
+            ticks:{ color:'#39FF14' }, grid:{ color:'#1a1a1a' } }
+      }
+    }
+  });
+
+  const maxTravel = 2.35;
+  function updateRigDisplay(rig, V){
+    const frac = V / VMAX;
+    const travelFrac = V / SCALE_MAX_CC;
+    rig.plungerGroup.position.x = 3.9 + travelFrac*maxTravel;
+    const len = Math.max(0.02, (rig.plungerGroup.position.x - 0.15) - 3.63);
+    rig.gasFill.scale.x = len; rig.gasFill.position.x = 3.63 + len/2;
+    // MnO2 is a catalyst -- it is NOT consumed, so its granules never shrink.
+    document.getElementById('volOut-'+rig.preset.key).textContent = V.toFixed(1);
+    if (frac > 0.995) rig.done = true;
+  }
+
+  function tick(){
+    t += 0.5;
+    let allDone = true;
+    rigs.forEach(rig=>{
+      const V = VMAX * (1 - Math.exp(-rig.preset.k*t));
+      rig.dataArr.push({x:t,y:V});
+      updateRigDisplay(rig, V);
+      if (!rig.done) allDone = false;
+    });
+    if (t + 15 > chart.options.scales.x.max){
+      chart.options.scales.x.max = Math.min(400, Math.ceil((t+40)/20)*20);
+    }
+    chart.update();
+    document.getElementById('timeOut').textContent = t.toFixed(1);
+    if (allDone || t > 400){
+      stopRun();
+      document.getElementById('playLabel').textContent = 'Reaction complete';
+    }
+  }
+  window.toggleRun = function(){ running ? stopRun() : startRun(); };
+  function startRun(){
+    running = true;
+    document.getElementById('playLabel').textContent = 'Pause';
+    document.querySelector('#playBtn i').className = 'ti ti-player-pause';
+    timer = setInterval(tick, 120);
+  }
+  function stopRun(){
+    running = false;
+    document.getElementById('playLabel').textContent = 'Resume';
+    document.querySelector('#playBtn i').className = 'ti ti-player-play';
+    if (timer) clearInterval(timer);
+  }
+  window.resetSim = function(){
+    stopRun();
+    t = 0;
+    chart.options.scales.x.max = 170;
+    document.getElementById('timeOut').textContent = '0.0';
+    rigs.forEach(rig=>{
+      rig.done = false;
+      rig.dataArr.length = 0; rig.dataArr.push({x:0,y:0});
+      updateRigDisplay(rig, 0);
+      rig.bubbles.forEach(b => { b.userData.dying = false; rig.spawnBubble(b, 1); b.position.y = 0.1+Math.random()*1.3; });
+    });
+    chart.update();
+    document.getElementById('playLabel').textContent = 'Start both reactions';
+  };
+
+  // Switching catalyst form changes surface area (and therefore rate) but is a genuinely
+  // different starting setup, so -- like changing any other setup parameter -- it restarts
+  // the whole comparison rather than trying to splice a discontinuity into a run in progress.
+  window.setCatalystForm = function(form){
+    if (form === catalystForm) return;
+    catalystForm = form;
+    document.getElementById('formBtn-granules').classList.toggle('active', form==='granules');
+    document.getElementById('formBtn-powder').classList.toggle('active', form==='powder');
+    const cfg = CATALYST_FORMS[form];
+    rigCatalyst.preset.k = cfg.k;
+    rigCatalyst.preset.bubbleRateMult = cfg.bubbleRateMult;
+    rigCatalyst.preset.bubbleSpeedMult = cfg.bubbleSpeedMult;
+    rigCatalyst.preset.bubbleSizeMult = cfg.bubbleSizeMult;
+    addCatalystGranules(rigCatalyst, form);
+    resetSim();
+  };
+
+  function maybeRespawn(b, ceiling, rateFrac, spawnFn, mult, canSpawn){
+    if (b.position.y > ceiling && !b.userData.dying){
+      if (canSpawn && Math.random() < Math.min(1, Math.max(rateFrac, 0.025)*mult)){
+        spawnFn(b, rateFrac);
+        return;
+      } else {
+        b.userData.dying = true;
+        b.userData.dyingStart = performance.now();
+        b.userData.dyingScale = b.scale.x;
+      }
+    }
+    if (b.userData.dying){
+      const age = (performance.now() - b.userData.dyingStart) / 1000;
+      const s = Math.max(0, b.userData.dyingScale * (1 - age/0.6));
+      b.scale.setScalar(s);
+      if (s <= 0.0005){
+        b.scale.setScalar(0.0001);
+        if (canSpawn) spawnFn(b, rateFrac);
+      }
+    }
+  }
+
+  let last = performance.now();
+  function animate(){
+    requestAnimationFrame(animate);
+    const now = performance.now();
+    const delta = (now-last)/1000; last = now;
+    rigs.forEach(rig=>{
+      if (!running && !rig.done) return;
+      const rateFrac = Math.max(0, Math.exp(-rig.preset.k*t));
+      const mult = rig.preset.bubbleRateMult;
+      const canSpawn = running && !rig.done;
+      rig.bubbles.forEach(b=>{
+        b.position.y += b.userData.speed*delta;
+        const age = (now - b.userData.spawnTime)/1000;
+        b.position.x = b.userData.baseX + Math.sin(age*b.userData.wobbleFreq + b.userData.phase)*b.userData.wobble;
+        b.position.z = b.userData.baseZ + Math.cos(age*b.userData.wobbleFreq*0.8 + b.userData.phase)*b.userData.wobble;
+        if (b.scale.x > 0.0005 && !b.userData.dying) b.scale.setScalar(b.userData.baseScale*Math.min(1, age/0.22));
+        if (b.position.y >= SURFACE_Y) b.scale.setScalar(0.0001);
+        maybeRespawn(b, SURFACE_Y, rateFrac, rig.spawnBubble, mult, canSpawn);
+      });
+    });
+    renderer.render(scene, camera);
+  }
+  animate();
+
+})();
+</script>
+
+<style id="rateChallengeStyle">
+.rate-challenge{max-width:900px;margin:22px auto;background:#050505;border:1px solid #2b2b2b;border-radius:12px;padding:18px 16px;font-family:-apple-system,'Segoe UI',sans-serif;color:#eee}.rate-challenge h2{margin:0 0 6px;color:#39FFE8;font-size:18px}.rate-challenge .intro{color:#aaa;font-size:13px;margin:0 0 14px}.rc-q{border-top:1px solid #222;padding:14px 0}.rc-q:first-of-type{border-top:0}.rc-prompt{line-height:1.45;margin-bottom:9px}.rc-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.rc-row input{background:#0b0b0b;color:#fff;border:1px solid #555;border-radius:6px;padding:9px 10px;width:150px;font-size:14px}.rc-row button{background:#0a0a0a;color:#39FFE8;border:1px solid #39FFE8;border-radius:6px;padding:9px 12px;cursor:pointer}.rc-row button.hint{color:#FFD23C;border-color:#FFD23C}.rc-feedback{min-height:20px;margin-top:8px;font-size:13px}.rc-hint{display:none;color:#FFD23C;margin-top:7px;font-size:12px}.rc-unit{color:#bbb;font-size:13px}</style><section class="rate-challenge"><h2>Student Challenge</h2><p class="intro">Calculate before revealing help. Enter a numerical answer; reasonable rounding is accepted.</p><div class="rc-q" data-answer="3.6" data-tol="0.05"><div class="rc-prompt">For the MnO₂ granules curve, calculate the initial rate of O₂ production.</div><div class="rc-row"><input type="number" step="any" inputmode="decimal" aria-label="Answer for challenge 1"><span class="rc-unit">cm³ s⁻¹</span><button type="button" class="check">Check answer</button><button type="button" class="hint">Hint</button></div><div class="rc-feedback" aria-live="polite"></div><div class="rc-hint">Initial rate for V = Vmax(1−e⁻ᵏᵗ) is Vmax × k.</div></div><div class="rc-q" data-answer="0.06" data-tol="0.005"><div class="rc-prompt">For the uncatalysed curve, calculate the initial rate of O₂ production.</div><div class="rc-row"><input type="number" step="any" inputmode="decimal" aria-label="Answer for challenge 2"><span class="rc-unit">cm³ s⁻¹</span><button type="button" class="check">Check answer</button><button type="button" class="hint">Hint</button></div><div class="rc-feedback" aria-live="polite"></div><div class="rc-hint">Use Vmax × k.</div></div></section><script>(function(){document.querySelectorAll('.rate-challenge .rc-q').forEach(function(q){var input=q.querySelector('input'),fb=q.querySelector('.rc-feedback'),hint=q.querySelector('.rc-hint');q.querySelector('.check').addEventListener('click',function(){var v=Number(input.value),a=Number(q.dataset.answer),t=Number(q.dataset.tol);if(!Number.isFinite(v)){fb.textContent='Enter a numerical value first.';fb.style.color='#FFD23C';return;}if(Math.abs(v-a)<=t){fb.textContent='Correct — your calculation is within the accepted rounding range.';fb.style.color='#39FF14';}else{fb.textContent='Not yet. Check the values, units and gradient calculation, then try again.';fb.style.color='#FF7CD4';}});q.querySelector('.hint').addEventListener('click',function(){var show=hint.style.display!=='block';hint.style.display=show?'block':'none';this.textContent=show?'Hide hint':'Hint';});});})();</script>

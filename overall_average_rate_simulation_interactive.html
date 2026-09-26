@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Overall Average Rate of Reaction</title>
+<style>
+  body { background:#000; font-family:-apple-system,'Segoe UI',sans-serif; margin:0; padding:24px; }
+  .wrap { max-width:900px; margin:0 auto; }
+  h1 { color:#FFFA1A; text-align:center; font-size:19px; font-weight:600; letter-spacing:0.3px;
+        text-shadow:0 0 6px rgba(255,250,26,0.85), 0 0 16px rgba(255,250,26,0.5); margin:0 0 4px; }
+  .subtitle { color:#666; text-align:center; font-size:12px; margin:0 0 16px; }
+  .card { background:#050505; border:1px solid #222; border-radius:12px; padding:18px 16px; box-shadow:0 0 20px rgba(0,240,255,0.08); }
+  svg { width:100%; height:auto; display:block; background:#000; border-radius:8px; }
+  .hidden { visibility:hidden; opacity:0; }
+  .reveal { transition:opacity 0.35s ease; }
+  .controls { display:flex; gap:14px; margin-top:18px; flex-wrap:wrap; justify-content:center; }
+  button.simbtn { background:#0a0a0a; border-radius:8px; padding:10px 18px; font-size:13.5px; font-weight:700; cursor:pointer; }
+  button.simbtn:hover { filter:brightness(1.3); }
+  #btnPoints { border:1.5px solid #00D9FF; color:#00D9FF; box-shadow:0 0 8px rgba(0,217,255,0.35); }
+  #btnSecant { border:1.5px solid #FFB800; color:#FFB800; box-shadow:0 0 8px rgba(255,184,0,0.35); }
+  #btnAnswer { border:1.5px solid #39FF14; color:#39FF14; box-shadow:0 0 8px rgba(57,255,20,0.35); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Calculating Average Rate of Reaction</h1>
+  <p class="subtitle">Click the buttons below to reveal each part of the rate calculation</p>
+  <div class="card">
+    <svg viewBox="0 0 900 560" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrowW" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="#ffffff"/>
+        </marker>
+      </defs>
+
+      <!-- graph subtitle -->
+      <text x="477.5" y="28" fill="#00F0FF" font-size="16" font-weight="700" text-anchor="middle" font-family="inherit">Volume of Gas vs Time (Overall Average Rate of Reaction)</text>
+
+      <!-- tick marks + values -->
+      <line x1="95.0" y1="500" x2="95.0" y2="506" stroke="#aaaaaa" stroke-width="1.5"/>
+      <text x="95.0" y="522" fill="#cccccc" font-size="12" text-anchor="middle" font-family="inherit">0</text>
+      <line x1="222.5" y1="500" x2="222.5" y2="506" stroke="#aaaaaa" stroke-width="1.5"/>
+      <text x="222.5" y="522" fill="#cccccc" font-size="12" text-anchor="middle" font-family="inherit">4</text>
+      <line x1="350.0" y1="500" x2="350.0" y2="506" stroke="#aaaaaa" stroke-width="1.5"/>
+      <text x="350.0" y="522" fill="#cccccc" font-size="12" text-anchor="middle" font-family="inherit">8</text>
+      <line x1="477.5" y1="500" x2="477.5" y2="506" stroke="#aaaaaa" stroke-width="1.5"/>
+      <text x="477.5" y="522" fill="#cccccc" font-size="12" text-anchor="middle" font-family="inherit">12</text>
+      <line x1="605.0" y1="500" x2="605.0" y2="506" stroke="#aaaaaa" stroke-width="1.5"/>
+      <text x="605.0" y="522" fill="#cccccc" font-size="12" text-anchor="middle" font-family="inherit">16</text>
+      <line x1="732.5" y1="500" x2="732.5" y2="506" stroke="#aaaaaa" stroke-width="1.5"/>
+      <text x="732.5" y="522" fill="#cccccc" font-size="12" text-anchor="middle" font-family="inherit">20</text>
+      <line x1="860.0" y1="500" x2="860.0" y2="506" stroke="#aaaaaa" stroke-width="1.5"/>
+      <text x="860.0" y="522" fill="#cccccc" font-size="12" text-anchor="middle" font-family="inherit">24</text>
+      <line x1="89" y1="500.0" x2="95" y2="500.0" stroke="#aaaaaa" stroke-width="1.5"/>
+      <text x="84" y="504.0" fill="#cccccc" font-size="12" text-anchor="end" font-family="inherit">0</text>
+      <line x1="89" y1="436.4" x2="95" y2="436.4" stroke="#aaaaaa" stroke-width="1.5"/>
+      <text x="84" y="440.4" fill="#cccccc" font-size="12" text-anchor="end" font-family="inherit">20</text>
+      <line x1="89" y1="372.9" x2="95" y2="372.9" stroke="#aaaaaa" stroke-width="1.5"/>
+      <text x="84" y="376.9" fill="#cccccc" font-size="12" text-anchor="end" font-family="inherit">40</text>
+      <line x1="89" y1="309.3" x2="95" y2="309.3" stroke="#aaaaaa" stroke-width="1.5"/>
+      <text x="84" y="313.3" fill="#cccccc" font-size="12" text-anchor="end" font-family="inherit">60</text>
+      <line x1="89" y1="245.7" x2="95" y2="245.7" stroke="#aaaaaa" stroke-width="1.5"/>
+      <text x="84" y="249.7" fill="#cccccc" font-size="12" text-anchor="end" font-family="inherit">80</text>
+      <line x1="89" y1="182.1" x2="95" y2="182.1" stroke="#aaaaaa" stroke-width="1.5"/>
+      <text x="84" y="186.1" fill="#cccccc" font-size="12" text-anchor="end" font-family="inherit">100</text>
+      <line x1="89" y1="118.6" x2="95" y2="118.6" stroke="#aaaaaa" stroke-width="1.5"/>
+      <text x="84" y="122.6" fill="#cccccc" font-size="12" text-anchor="end" font-family="inherit">120</text>
+      <line x1="89" y1="55.0" x2="95" y2="55.0" stroke="#aaaaaa" stroke-width="1.5"/>
+      <text x="84" y="59.0" fill="#cccccc" font-size="12" text-anchor="end" font-family="inherit">140</text>
+
+      <!-- axes -->
+      <line x1="95" y1="500" x2="95" y2="45" stroke="#ffffff" stroke-width="2.4" marker-end="url(#arrowW)"/>
+      <line x1="95" y1="500" x2="870" y2="500" stroke="#ffffff" stroke-width="2.4" marker-end="url(#arrowW)"/>
+
+      <!-- axis titles -->
+      <text x="477.5" y="544" fill="#00F0FF" font-size="15" font-weight="700" text-anchor="middle" font-family="inherit">Time (s)</text>
+      <text x="22" y="277.5" fill="#00F0FF" font-size="15" font-weight="700" text-anchor="middle" font-family="inherit"
+            transform="rotate(-90 22 277.5)">Volume of Gas Evolved (cm³)</text>
+
+      <!-- curve -->
+      <polyline points="95.0,500.0 102.7,473.6 110.3,448.8 118.0,425.7 125.6,404.1 133.2,383.9 140.9,365.0 148.6,347.3 156.2,330.8 163.9,315.4 171.5,300.9 179.2,287.4 186.8,274.8 194.4,263.0 202.1,251.9 209.8,241.6 217.4,232.0 225.1,223.0 232.7,214.5 240.3,206.6 248.0,199.3 255.7,192.4 263.3,185.9 270.9,179.9 278.6,174.2 286.2,169.0 293.9,164.0 301.6,159.4 309.2,155.1 316.9,151.1 324.5,147.3 332.1,143.8 339.8,140.5 347.5,137.4 355.1,134.6 362.8,131.9 370.4,129.4 378.1,127.0 385.7,124.8 393.3,122.7 401.0,120.8 408.6,119.0 416.3,117.3 423.9,115.8 431.6,114.3 439.2,112.9 446.9,111.6 454.5,110.4 462.2,109.3 469.8,108.3 477.5,107.3 485.2,106.4 492.8,105.5 500.5,104.7 508.1,103.9 515.8,103.2 523.4,102.6 531.0,102.0 538.7,101.4 546.3,100.9 554.0,100.4 561.6,99.9 569.3,99.5 577.0,99.0 584.6,98.7 592.2,98.3 599.9,98.0 607.5,97.7 615.2,97.4 622.8,97.1 630.5,96.8 638.1,96.6 645.8,96.4 653.4,96.2 661.1,96.0 668.8,95.8 676.4,95.6 684.1,95.4 691.7,95.3 699.4,95.2 707.0,95.0 714.7,94.9 722.3,94.8 730.0,94.7 737.6,94.6 745.2,94.5 752.9,94.4 760.5,94.3 768.2,94.2 775.9,94.2 783.5,94.1 791.1,94.0 798.8,94.0 806.5,93.9 814.1,93.9 821.8,93.8 829.4,93.8 837.1,93.7 844.7,93.7 852.4,93.7 860.0,93.6" fill="none" stroke="#00FFC6" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+      <!-- secant line (hidden) -->
+      <line id="secantLine" class="hidden reveal" x1="95.0" y1="500.0" x2="620.9" y2="97.3"
+            stroke="#FFB800" stroke-width="3" stroke-dasharray="9,6"/>
+
+      <!-- points (hidden) -->
+      <g id="pointsGroup" class="hidden reveal">
+        <circle cx="95.0" cy="500.0" r="6.5" fill="#ffffff" stroke="#000" stroke-width="1.5"/>
+        <circle cx="620.9" cy="97.3" r="6.5" fill="#ffffff" stroke="#000" stroke-width="1.5"/>
+        <rect x="117.2" y="455.5" width="145.6" height="25.5" rx="5" fill="#000000" fill-opacity="0.88" stroke="#ffffff" stroke-width="1.3"/><text x="190.0" y="472.0" fill="#ffffff" font-size="13.5" font-weight="700" text-anchor="middle" font-family="inherit">(t₁,V₁) = (0, 0)</text>
+        <rect x="519.8" y="54.7" width="202.3" height="25.5" rx="5" fill="#000000" fill-opacity="0.88" stroke="#ffffff" stroke-width="1.3"/><text x="620.9" y="71.3" fill="#ffffff" font-size="13.5" font-weight="700" text-anchor="middle" font-family="inherit">(t₂,V₂) = (16.5, 126.7)</text>
+      </g>
+
+      <!-- answer (hidden) -->
+      <g id="answerText" class="hidden reveal">
+        <rect x="557.0" y="389.5" width="177.6" height="34.0" rx="5" fill="#000000" fill-opacity="0.88" stroke="#39FF14" stroke-width="1.3"/><text x="645.8" y="411.0" fill="#39FF14" font-size="16" font-weight="700" text-anchor="middle" font-family="inherit">Rate = 7.7 cm³/s</text>
+      </g>
+    </svg>
+
+    <div class="controls">
+      <button class="simbtn" id="btnPoints" onclick="toggle('pointsGroup', this, 'Hide Points &amp; Coordinates', 'Show Points &amp; Coordinates')">Show Points &amp; Coordinates</button>
+      <button class="simbtn" id="btnSecant" onclick="toggle('secantLine', this, 'Hide Secant Line', 'Show Secant Line')">Show Secant Line</button>
+      <button class="simbtn" id="btnAnswer" onclick="toggle('answerText', this, 'Hide Answer', 'Show Answer')">Show Answer</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function toggle(id, btn, onLabel, offLabel){
+  var el = document.getElementById(id);
+  var showing = el.classList.contains('hidden');
+  el.classList.toggle('hidden');
+  btn.textContent = showing ? onLabel : offLabel;
+}
+</script>
+</body>
+</html>
+
+<style id="rateChallengeStyle">
+.rate-challenge{max-width:900px;margin:22px auto;background:#050505;border:1px solid #2b2b2b;border-radius:12px;padding:18px 16px;font-family:-apple-system,'Segoe UI',sans-serif;color:#eee}.rate-challenge h2{margin:0 0 6px;color:#39FFE8;font-size:18px}.rate-challenge .intro{color:#aaa;font-size:13px;margin:0 0 14px}.rc-q{border-top:1px solid #222;padding:14px 0}.rc-q:first-of-type{border-top:0}.rc-prompt{line-height:1.45;margin-bottom:9px}.rc-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.rc-row input{background:#0b0b0b;color:#fff;border:1px solid #555;border-radius:6px;padding:9px 10px;width:150px;font-size:14px}.rc-row button{background:#0a0a0a;color:#39FFE8;border:1px solid #39FFE8;border-radius:6px;padding:9px 12px;cursor:pointer}.rc-row button.hint{color:#FFD23C;border-color:#FFD23C}.rc-feedback{min-height:20px;margin-top:8px;font-size:13px}.rc-hint{display:none;color:#FFD23C;margin-top:7px;font-size:12px}.rc-unit{color:#bbb;font-size:13px}</style><section class="rate-challenge"><h2>Student Challenge</h2><p class="intro">Calculate before revealing help. Enter a numerical answer; reasonable rounding is accepted.</p><div class="rc-q" data-answer="7.678787879" data-tol="0.08"><div class="rc-prompt">Use the two selected points to calculate the overall average rate.</div><div class="rc-row"><input type="number" step="any" inputmode="decimal" aria-label="Answer for challenge 1"><span class="rc-unit">cm³ s⁻¹</span><button type="button" class="check">Check answer</button><button type="button" class="hint">Hint</button></div><div class="rc-feedback" aria-live="polite"></div><div class="rc-hint">Rate = ΔV/Δt.</div></div></section><script>(function(){document.querySelectorAll('.rate-challenge .rc-q').forEach(function(q){var input=q.querySelector('input'),fb=q.querySelector('.rc-feedback'),hint=q.querySelector('.rc-hint');q.querySelector('.check').addEventListener('click',function(){var v=Number(input.value),a=Number(q.dataset.answer),t=Number(q.dataset.tol);if(!Number.isFinite(v)){fb.textContent='Enter a numerical value first.';fb.style.color='#FFD23C';return;}if(Math.abs(v-a)<=t){fb.textContent='Correct — your calculation is within the accepted rounding range.';fb.style.color='#39FF14';}else{fb.textContent='Not yet. Check the values, units and gradient calculation, then try again.';fb.style.color='#FF7CD4';}});q.querySelector('.hint').addEventListener('click',function(){var show=hint.style.display!=='block';hint.style.display=show?'block':'none';this.textContent=show?'Hide hint':'Hint';});});})();</script>

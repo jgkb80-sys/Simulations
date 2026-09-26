@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Effect of a Catalyst on Activation Energy</title>
+<style>
+  body { background:#000; font-family:-apple-system,'Segoe UI',sans-serif; margin:0; padding:24px; }
+  .wrap { max-width:900px; margin:0 auto; }
+  h1 { color:#FFFA1A; text-align:center; font-size:19px; font-weight:600; letter-spacing:0.3px;
+       text-shadow:0 0 6px rgba(255,250,26,0.85), 0 0 16px rgba(255,250,26,0.5); margin:0 0 4px; }
+  .subtitle { color:#666; text-align:center; font-size:12px; margin:0 0 16px; }
+  .card { background:#050505; border:1px solid #222; border-radius:12px; padding:18px 16px; box-shadow:0 0 20px rgba(0,240,255,0.08); }
+  canvas { width:100%; height:auto; display:block; background:#000; border-radius:8px; }
+  .controls { display:flex; gap:12px; margin-top:18px; flex-wrap:wrap; justify-content:center; align-items:center; }
+  button.simbtn { background:#0a0a0a; border-radius:8px; padding:11px 22px; font-size:14px; font-weight:700; cursor:pointer; transition:filter 0.15s; }
+  button.simbtn:hover { filter:brightness(1.3); }
+  #btnCatalyst { border:1.5px solid #39FF14; color:#39FF14; box-shadow:0 0 10px rgba(57,255,20,0.4); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Effect of a Catalyst on Activation Energy</h1>
+  <p class="subtitle">The shaded area shows the proportion of particles with kinetic energy &ge; the activation energy</p>
+  <div class="card">
+    <canvas id="cv" width="900" height="560"></canvas>
+    <div class="controls">
+      <button class="simbtn" id="btnCatalyst" onclick="toggleCatalyst()">Add Catalyst</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const canvas = document.getElementById('cv');
+  const ctx = canvas.getContext('2d');
+  const W = 900, H = 560;
+  const pl = 95, pr = 40, pt = 55, pb = 60;
+  const x0 = pl, y0 = pt, x1 = W-pr, y1 = H-pb;
+  const plotW = x1-x0, plotH = y1-y0;
+
+  const xmin = 0, xmax = 14, ymin = 0, ymax = 0.34;
+  const SIGMA = 2.0; // fixed temperature -- only the activation energy changes here, not T
+  const EA_UNCAT = 5.0;
+  const EA_CAT = 3.5;
+
+  const CURVE_COLOR = '#00D9FF';
+  const CURVE_RGB = [0,217,255];
+  const UNCAT_COLOR = '#FF2DD7';
+  const CAT_COLOR = '#39FF14';
+
+  function X(e){ return x0 + (e-xmin)/(xmax-xmin)*plotW; }
+  function Y(v){ return y1 - (v-ymin)/(ymax-ymin)*plotH; }
+
+  function f(E){
+    if (E <= 0) return 0;
+    const C = Math.sqrt(2/Math.PI) / Math.pow(SIGMA,3);
+    return C * E*E * Math.exp(-(E*E)/(2*SIGMA*SIGMA));
+  }
+
+  function drawArrowAxis(fromX,fromY,toX,toY){
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.4;
+    ctx.beginPath(); ctx.moveTo(fromX,fromY); ctx.lineTo(toX,toY); ctx.stroke();
+    const ang = Math.atan2(toY-fromY, toX-fromX);
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(toX, toY);
+    ctx.lineTo(toX - 9*Math.cos(ang-0.4), toY - 9*Math.sin(ang-0.4));
+    ctx.lineTo(toX - 9*Math.cos(ang+0.4), toY - 9*Math.sin(ang+0.4));
+    ctx.closePath(); ctx.fill();
+  }
+
+  function roundRect(x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);
+    ctx.arcTo(x,y,x+w,y,r);
+    ctx.closePath();
+  }
+
+  function textBg(x, y, text, color, fontSize, align){
+    fontSize = fontSize || 13.5;
+    align = align || 'center';
+    ctx.font = 'bold ' + fontSize + 'px sans-serif';
+    const tw = ctx.measureText(text).width;
+    const padX = 8, padY = 6;
+    let boxX;
+    if (align === 'center') boxX = x - tw/2 - padX;
+    else if (align === 'left') boxX = x - padX;
+    else boxX = x - tw - padX;
+    const boxY = y - fontSize*0.8 - padY;
+    ctx.fillStyle = 'rgba(0,0,0,0.88)';
+    ctx.strokeStyle = color; ctx.lineWidth = 1.3;
+    roundRect(boxX, boxY, tw+2*padX, fontSize+2*padY, 5);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.textAlign = align === 'center' ? 'center' : (align === 'left' ? 'left' : 'right');
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(text, x, y);
+  }
+
+  // currentEa animates toward whichever Ea is currently "active" (uncatalyzed or catalyzed).
+  // The shaded region always follows currentEa directly, so it visibly grows in real time
+  // as the catalyzed threshold is approached, while the original uncatalyzed marker below
+  // is drawn separately and never moves, so the comparison stays on screen throughout.
+  let currentEa = EA_UNCAT;
+  let targetEa = EA_UNCAT;
+  let catalystOn = false;
+
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle = '#000'; ctx.fillRect(0,0,W,H);
+
+    ctx.fillStyle = '#00F0FF'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline='alphabetic';
+    ctx.fillText('Kinetic Energy Distribution of Particles', (x0+x1)/2, 28);
+
+    ctx.fillStyle = '#cccccc'; ctx.font = '12px sans-serif';
+    for (let e=0; e<=xmax; e+=2){
+      const px = X(e);
+      ctx.strokeStyle = '#aaaaaa'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(px,y1); ctx.lineTo(px,y1+6); ctx.stroke();
+      ctx.textAlign = 'center';
+      ctx.fillText(e, px, y1+22);
+    }
+    for (let v=0; v<=ymax+0.001; v+=0.05){
+      const py = Y(v);
+      ctx.strokeStyle = '#aaaaaa'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(x0-6,py); ctx.lineTo(x0,py); ctx.stroke();
+      ctx.textAlign = 'right';
+      ctx.fillText(v.toFixed(2), x0-11, py+4);
+    }
+
+    drawArrowAxis(x0, y1, x0, pt-10);
+    drawArrowAxis(x0, y1, x1+10, y1);
+
+    ctx.fillStyle = '#00F0FF'; ctx.font = 'bold 15px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('Kinetic Energy', (x0+x1)/2, H-16);
+    ctx.save();
+    ctx.translate(22, (y0+y1)/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText('Probability Density', 0, 0);
+    ctx.restore();
+
+    // shaded area under curve, from the CURRENT (animating) activation energy rightward
+    ctx.fillStyle = `rgba(${CURVE_RGB[0]},${CURVE_RGB[1]},${CURVE_RGB[2]},0.32)`;
+    ctx.beginPath();
+    ctx.moveTo(X(currentEa), y1);
+    const steps = 140;
+    for (let i=0;i<=steps;i++){
+      const e = currentEa + (xmax-currentEa)*i/steps;
+      ctx.lineTo(X(e), Y(f(e)));
+    }
+    ctx.lineTo(X(xmax), y1);
+    ctx.closePath();
+    ctx.fill();
+
+    // curve
+    ctx.strokeStyle = CURVE_COLOR; ctx.lineWidth = 3.5; ctx.lineCap='round'; ctx.lineJoin='round';
+    ctx.beginPath();
+    const N = 180;
+    for (let i=0;i<=N;i++){
+      const e = xmin + (xmax-xmin)*i/N;
+      const px = X(e), py = Y(f(e));
+      if (i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+    }
+    ctx.stroke();
+
+    // uncatalyzed Ea marker -- fixed, always visible, always labelled. Label anchored near
+    // the top of the plot (not the bottom) so it never collides with the x-axis title.
+    ctx.strokeStyle = UNCAT_COLOR; ctx.lineWidth = 2; ctx.setLineDash([7,5]);
+    ctx.beginPath(); ctx.moveTo(X(EA_UNCAT), y1); ctx.lineTo(X(EA_UNCAT), pt-6); ctx.stroke();
+    ctx.setLineDash([]);
+    textBg(X(EA_UNCAT), pt+86, 'Ea (uncatalyzed)', UNCAT_COLOR, 13);
+
+    // catalyzed Ea marker -- only shown once it has moved meaningfully away from the
+    // uncatalyzed position (covers both the forward and reverse animation)
+    if (Math.abs(currentEa - EA_UNCAT) > 0.04){
+      ctx.strokeStyle = CAT_COLOR; ctx.lineWidth = 2.4; ctx.setLineDash([5,5]);
+      ctx.beginPath(); ctx.moveTo(X(currentEa), y1); ctx.lineTo(X(currentEa), pt-6); ctx.stroke();
+      ctx.setLineDash([]);
+      textBg(X(currentEa), pt+34, 'Ea (catalyzed)', CAT_COLOR, 13);
+    }
+  }
+
+  function animate(){
+    requestAnimationFrame(animate);
+    const diff = targetEa - currentEa;
+    if (Math.abs(diff) > 0.01){ currentEa += diff*0.06; }
+    else { currentEa = targetEa; }
+    draw();
+  }
+
+  window.toggleCatalyst = function(){
+    catalystOn = !catalystOn;
+    targetEa = catalystOn ? EA_CAT : EA_UNCAT;
+    const btn = document.getElementById('btnCatalyst');
+    btn.textContent = catalystOn ? 'Remove Catalyst' : 'Add Catalyst';
+  };
+
+  draw();
+  animate();
+})();
+</script>
+</body>
+</html>
+
+<style id="rateChallengeStyle">
+.rate-challenge{max-width:900px;margin:22px auto;background:#050505;border:1px solid #2b2b2b;border-radius:12px;padding:18px 16px;font-family:-apple-system,'Segoe UI',sans-serif;color:#eee}.rate-challenge h2{margin:0 0 6px;color:#39FFE8;font-size:18px}.rate-challenge .intro{color:#aaa;font-size:13px;margin:0 0 14px}.rc-q{border-top:1px solid #222;padding:14px 0}.rc-q:first-of-type{border-top:0}.rc-prompt{line-height:1.45;margin-bottom:9px}.rc-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.rc-row input{background:#0b0b0b;color:#fff;border:1px solid #555;border-radius:6px;padding:9px 10px;width:150px;font-size:14px}.rc-row button{background:#0a0a0a;color:#39FFE8;border:1px solid #39FFE8;border-radius:6px;padding:9px 12px;cursor:pointer}.rc-row button.hint{color:#FFD23C;border-color:#FFD23C}.rc-feedback{min-height:20px;margin-top:8px;font-size:13px}.rc-hint{display:none;color:#FFD23C;margin-top:7px;font-size:12px}.rc-unit{color:#bbb;font-size:13px}</style><section class="rate-challenge"><h2>Student Challenge</h2><p class="intro">Calculate before revealing help. Enter a numerical answer; reasonable rounding is accepted.</p><div class="rc-q" data-answer="1.5" data-tol="0.01"><div class="rc-prompt">If the uncatalysed activation energy is 5.0 arbitrary energy units and the catalysed value is 3.5, by how much has the activation energy decreased?</div><div class="rc-row"><input type="number" step="any" inputmode="decimal" aria-label="Answer for challenge 1"><span class="rc-unit">energy units</span><button type="button" class="check">Check answer</button><button type="button" class="hint">Hint</button></div><div class="rc-feedback" aria-live="polite"></div><div class="rc-hint">Subtract the catalysed Ea from the uncatalysed Ea.</div></div></section><script>(function(){document.querySelectorAll('.rate-challenge .rc-q').forEach(function(q){var input=q.querySelector('input'),fb=q.querySelector('.rc-feedback'),hint=q.querySelector('.rc-hint');q.querySelector('.check').addEventListener('click',function(){var v=Number(input.value),a=Number(q.dataset.answer),t=Number(q.dataset.tol);if(!Number.isFinite(v)){fb.textContent='Enter a numerical value first.';fb.style.color='#FFD23C';return;}if(Math.abs(v-a)<=t){fb.textContent='Correct — your calculation is within the accepted rounding range.';fb.style.color='#39FF14';}else{fb.textContent='Not yet. Check the values, units and gradient calculation, then try again.';fb.style.color='#FF7CD4';}});q.querySelector('.hint').addEventListener('click',function(){var show=hint.style.display!=='block';hint.style.display=show?'block':'none';this.textContent=show?'Hide hint':'Hint';});});})();</script>

@@ -1,0 +1,656 @@
+<h2 class="sr-only">3D simulation of three flasks reacting simultaneously: calcium carbonate as large lumps, small chips, and powder, each with hydrochloric acid on its own digital balance, where powder fizzes fastest and stops bubbling first, lumps fizz slowly and keep going far longer, all three mass readings are plotted live on one shared graph, the simulation keeps running until every flask — including the slow-reacting lumps — has fully consumed its calcium carbonate, and bubbles in each flask stop forming once that flask's reaction is finished but drift upward and fade away rather than freezing. A plain yellow label above each flask names its surface-area condition. Sliders let the view be scrolled up, down, left, or right in addition to the existing rotate and zoom controls. An optional close-up view shows three small circular panels, one floating above each flask, comparing how often red HCl particles collide with the exposed marble surface: a single large square for the lump, several medium squares for the chips, and many small squares for the powder, with both the exposed surface and the number of colliding particles increasing together so collisions visibly happen far more often in the powder panel than in the lump panel.</h2>
+<div style="background:#000; border-radius:12px; padding:20px 16px; font-family:var(--font-sans, sans-serif);">
+
+  <div style="text-align:center; color:#FFFA1A; font-size:18px; font-weight:600; letter-spacing:0.3px; margin-bottom:14px; text-shadow:0 0 6px rgba(255,250,26,0.85), 0 0 16px rgba(255,250,26,0.5);">
+    CaCO<sub>3</sub>(s) + 2HCl(aq) &rarr; CaCl<sub>2</sub>(aq) + H<sub>2</sub>O(l) + CO<sub>2</sub>(g)
+  </div>
+
+  <div id="stageWrap" style="position:relative; width:100%; height:440px; border-radius:10px; overflow:hidden; background:#000;">
+    <canvas id="three-canvas" style="width:100%; height:100%; display:block; cursor:grab;"></canvas>
+    <div style="position:absolute; bottom:8px; right:12px; font-size:11px; color:#5a5a5a; font-family:sans-serif;">drag to rotate &middot; scroll to zoom</div>
+
+    <div style="position:absolute; left:10px; top:50%; transform:translateY(-50%); z-index:6; display:flex; flex-direction:column; align-items:center; gap:4px; background:rgba(0,0,0,0.45); padding:8px 4px; border-radius:8px;">
+      <span style="color:#39FFE8; font-size:13px; line-height:1;">&uarr;</span>
+      <input type="range" id="panSlider" min="-4" max="4" step="0.05" value="0"
+        style="width:150px; transform:rotate(-90deg); accent-color:#39FFE8; cursor:pointer;"
+        oninput="onPanSlider(this.value)" aria-label="Scroll the view up or down">
+      <span style="color:#39FFE8; font-size:13px; line-height:1;">&darr;</span>
+    </div>
+
+    <div style="position:absolute; left:50%; bottom:10px; transform:translateX(-50%); z-index:6; display:flex; align-items:center; gap:6px; background:rgba(0,0,0,0.45); padding:4px 8px; border-radius:8px;">
+      <span style="color:#39FFE8; font-size:13px; line-height:1;">&larr;</span>
+      <input type="range" id="panSliderX" min="-8" max="8" step="0.05" value="0"
+        style="width:150px; accent-color:#39FFE8; cursor:pointer;"
+        oninput="onPanSliderX(this.value)" aria-label="Scroll the view left or right">
+      <span style="color:#39FFE8; font-size:13px; line-height:1;">&rarr;</span>
+    </div>
+
+    <div class="collision-overlay" id="collisionOverlay-lumps" style="display:none;">
+      <div class="collision-circle-sm"><canvas id="collisionLumps" width="150" height="150"></canvas></div>
+      <div class="collision-overlay-label">Large lumps<br>fewer collisions</div>
+    </div>
+    <div class="collision-overlay" id="collisionOverlay-chips" style="display:none;">
+      <div class="collision-circle-sm"><canvas id="collisionChips" width="150" height="150"></canvas></div>
+      <div class="collision-overlay-label">Small chips<br>more collisions</div>
+    </div>
+    <div class="collision-overlay" id="collisionOverlay-powder" style="display:none;">
+      <div class="collision-circle-sm"><canvas id="collisionPowder" width="150" height="150"></canvas></div>
+      <div class="collision-overlay-label">Powder<br>many more collisions</div>
+    </div>
+  </div>
+  <p style="color:#666; font-size:11px; margin:6px 2px 0;">Use the &uarr;&darr; slider on the left and the &larr;&rarr; slider at the bottom to scroll the view &mdash; handy for seeing a flask and its collision close-up at the same time when zoomed in.</p>
+
+  <style>
+    button.simbtn { background:#0a0a0a; border:1px solid #39FFE8; color:#39FFE8; border-radius:6px; padding:8px 16px; font-size:13px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+    button.simbtn:hover { background:#102; }
+    button.simbtn.alt { border-color:#FF7CD4; color:#FF7CD4; }
+    button.simbtn.alt:hover { background:#210016; }
+    .collision-overlay { position:absolute; left:0; top:0; transform:translate(-50%,-100%); pointer-events:none; text-align:center; z-index:5; }
+    .collision-circle-sm { width:140px; height:140px; border-radius:50%; overflow:hidden; border:3px solid #ff2fd6; box-shadow:0 0 14px rgba(255,47,214,0.5); background:#000; margin:0 auto; }
+    .collision-circle-sm canvas { display:block; width:100%; height:100%; }
+    .collision-overlay-label { margin-top:4px; font-size:10.5px; line-height:1.25; color:#eee; font-weight:600; text-shadow:0 0 3px rgba(0,0,0,0.9); background:rgba(0,0,0,0.6); border-radius:4px; padding:2px 7px; display:inline-block; }
+  </style>
+
+  <div style="display:flex; align-items:center; gap:12px; margin:14px 0 8px; flex-wrap:wrap;">
+    <button class="simbtn" id="playBtn" onclick="toggleRun()"><i class="ti ti-player-play" aria-hidden="true"></i><span id="playLabel">Start all reactions</span></button>
+    <button class="simbtn" onclick="resetSim()"><i class="ti ti-refresh" aria-hidden="true"></i>Reset all</button>
+    <button class="simbtn alt" id="collisionBtn" onclick="toggleCollisionPanel()"><i class="ti ti-circle-dot" aria-hidden="true"></i><span id="collisionBtnLabel">Show collision close-up</span></button>
+    <span style="color:#9fffb0; font-size:13px;">Time: <span id="timeOut">0.0</span> s</span>
+  </div>
+
+  <div style="display:flex; align-items:center; gap:18px; margin:2px 0 6px; flex-wrap:wrap; font-size:13px;">
+    <span style="color:#39FFE8;">&#9679; Large lumps: <span id="massOut-lumps">150.0000</span> g</span>
+    <span style="color:#FF7CD4;">&#9679; Small chips: <span id="massOut-chips">150.0000</span> g</span>
+    <span style="color:#FFD23C;">&#9679; Powder: <span id="massOut-powder">150.0000</span> g</span>
+  </div>
+
+  <div style="position:relative; width:100%; height:260px; margin-top:10px;">
+    <canvas id="massChart" role="img" aria-label="Line chart of the mass of each flask and its contents in grams versus time in seconds, three curves plotted together, powder falling and levelling off fastest, small chips next, large lumps falling slowest but the simulation keeps running until the lumps curve also flattens out completely">Three curves all fall from 150 grams toward about 149.56 grams as carbon dioxide escapes. Powder plateaus within seconds, small chips plateau within about two minutes, and large lumps take much longer but the simulation keeps running until they finish too.</canvas>
+  </div>
+
+  <p id="footnote" style="color:#888; font-size:12px; margin-top:10px; line-height:1.5;">All three flasks start with the same mass of marble and excess acid, so they all lose the same total mass in the end (about 0.44 g of CO&#8322;) &mdash; surface area only changes how fast that mass is lost. The simulation keeps running until even the large lumps are fully consumed. Watch the bubbling stop in each flask as its curve flattens out &mdash; and notice how much more vigorously the powder fizzes than the lumps, since it has far more surface area exposed to the acid. The "Show collision close-up" button illustrates why: the same red HCl particles collide with the marble far more often as it's broken into smaller pieces, since more of its surface is exposed at once &mdash; count the green flashes in each panel and you'll see collisions happen fastest in the powder panel and slowest in the lump panel.</p>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+(function(){
+  if (typeof THREE === 'undefined' || typeof Chart === 'undefined') {
+    document.body.innerHTML = '<div style="color:#ff5c5c;background:#1a0000;border:1px solid #ff5c5c;border-radius:8px;padding:20px;max-width:600px;margin:60px auto;font-family:sans-serif;">Could not load required libraries from the CDN. Try opening this in a regular browser tab.</div>';
+    return;
+  }
+  const canvas = document.getElementById('three-canvas');
+  const wrap = canvas.parentElement;
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.shadowMap.enabled = true;
+
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x000000, 0.02);
+  const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+
+  function resize(){
+    const w = wrap.clientWidth, h = wrap.clientHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+
+  scene.add(new THREE.AmbientLight(0x223344, 0.85));
+  const key = new THREE.DirectionalLight(0xffffff, 1.3);
+  key.position.set(4, 9, 6); key.castShadow = true; key.shadow.mapSize.set(1024,1024);
+  scene.add(key);
+  const cyanLight = new THREE.PointLight(0x39FFE8, 1.2, 30);
+  cyanLight.position.set(-5, 4, 5); scene.add(cyanLight);
+  const magLight = new THREE.PointLight(0xFF3CAC, 1.0, 30);
+  magLight.position.set(1, 3, -5); scene.add(magLight);
+  const amberLight = new THREE.PointLight(0xFFD23C, 1.0, 30);
+  amberLight.position.set(6, 3, 4); scene.add(amberLight);
+
+  // No floor plane -- the apparatus floats in plain black space rather than sitting on
+  // a visible ground surface.
+
+  function makeBubbleMaterial(){
+    return new THREE.ShaderMaterial({
+      uniforms: { color: { value: new THREE.Color(0xcdfeff) }, fade: { value: 1.0 } },
+      vertexShader: `
+        varying vec3 vNormal;
+        varying vec3 vViewDir;
+        void main(){
+          vNormal = normalize(normalMatrix * normal);
+          vec4 mvPosition = modelViewMatrix * vec4(position,1.0);
+          vViewDir = normalize(-mvPosition.xyz);
+          gl_Position = projectionMatrix * mvPosition;
+        }`,
+      fragmentShader: `
+        uniform vec3 color;
+        uniform float fade;
+        varying vec3 vNormal;
+        varying vec3 vViewDir;
+        void main(){
+          vec3 n = normalize(vNormal);
+          vec3 v = normalize(vViewDir);
+          float fresnel = pow(1.0 - max(dot(n, v), 0.0), 2.4);
+          vec3 lightDir = normalize(vec3(0.4, 0.9, 0.35));
+          float spec = pow(max(dot(reflect(-lightDir, n), v), 0.0), 70.0);
+          vec3 rim = mix(color, vec3(1.0), 0.35);
+          vec3 finalColor = mix(color*0.55, rim, fresnel) + spec*0.85;
+          float alpha = mix(0.045, 0.72, fresnel) * fade + spec*0.55*fade;
+          gl_FragColor = vec4(finalColor, clamp(alpha, 0.0, 1.0));
+        }`,
+      transparent: true, depthWrite:false, side: THREE.DoubleSide
+    });
+  }
+
+  const presets = {
+    lumps:  { key:'lumps',  label:'Large lumps', color:'#39FFE8', xPos:-4.6, k:0.010, bubbleRateMult:0.6, bubbleSpeedMult:0.7,  bubbleSizeMult:0.85, wobbleFreqMult:0.8, granuleCount:4,  granuleSizeRange:[0.12,0.16] },
+    chips:  { key:'chips',  label:'Small chips', color:'#FF7CD4', xPos:0.4,  k:0.045, bubbleRateMult:1.0, bubbleSpeedMult:1.0,  bubbleSizeMult:1.0,  wobbleFreqMult:1.0, granuleCount:10, granuleSizeRange:[0.065,0.10] },
+    powder: { key:'powder', label:'Powder',      color:'#FFD23C', xPos:5.4,  k:0.150, bubbleRateMult:2.2, bubbleSpeedMult:1.5,  bubbleSizeMult:1.3,  wobbleFreqMult:1.6, granuleCount:26, granuleSizeRange:[0.024,0.038] }
+  };
+
+  const M0 = 150.0000;
+  const massLossMax = 0.4400;
+  // Height of the liquid surface inside each flask (all three share the same liquid
+  // geometry — see liquidPts below, which tops out at y=1.32). Bubbles rising through
+  // the solution must disappear at/just below this line rather than floating visibly
+  // in the empty headspace above the liquid.
+  const SURFACE_Y = 1.28;
+  // Top of the cotton plug at each flask's mouth (cottonGroup sits at y=2.78, with puffs
+  // extending a bit above and below that). Escaping-gas bubbles must never be visible
+  // above this height either.
+  const COTTON_TOP_Y = 2.95;
+
+  // Flat, plain neon-yellow label floating above each flask -- no shadow/glow.
+  const LABEL_COLOR = '#FFFA1A';
+  function makeLabel(text){
+    const c = document.createElement('canvas'); c.width = 420; c.height = 110;
+    const ctx = c.getContext('2d');
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = LABEL_COLOR;
+    ctx.font = 'bold 52px sans-serif';
+    ctx.fillText(text, 210, 55);
+    const tex = new THREE.CanvasTexture(c);
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent:true, depthTest:false }));
+    spr.scale.set(1.9,0.5,1);
+    return spr;
+  }
+
+  function buildRig(preset){
+    const rig = { preset, done:false, dataArr:[{x:0,y:M0}] };
+    const xPos = preset.xPos;
+
+    const balanceBody = new THREE.Mesh(new THREE.BoxGeometry(2.6,0.5,2.0),
+      new THREE.MeshStandardMaterial({ color:0x1c1c1e, metalness:0.4, roughness:0.5 }));
+    balanceBody.position.set(xPos,0.25,0); balanceBody.castShadow = true; balanceBody.receiveShadow = true;
+    scene.add(balanceBody);
+    const balancePan = new THREE.Mesh(new THREE.CylinderGeometry(0.95,0.95,0.06,32),
+      new THREE.MeshStandardMaterial({ color:0xaaaaaa, metalness:0.8, roughness:0.3 }));
+    balancePan.position.set(xPos,0.53,0); balancePan.castShadow = true;
+    scene.add(balancePan);
+
+    const dispCanvas = document.createElement('canvas'); dispCanvas.width = 512; dispCanvas.height = 160;
+    const dispCtx = dispCanvas.getContext('2d');
+    function drawDisplay(text){
+      dispCtx.fillStyle = '#041006'; dispCtx.fillRect(0,0,512,160);
+      dispCtx.font = 'bold 84px monospace';
+      dispCtx.fillStyle = '#39FF14';
+      dispCtx.textAlign = 'center'; dispCtx.textBaseline = 'middle';
+      dispCtx.fillText(text, 256, 88);
+    }
+    drawDisplay('150.0000');
+    const dispTexture = new THREE.CanvasTexture(dispCanvas);
+    const displayPlane = new THREE.Mesh(new THREE.PlaneGeometry(1.7,0.55),
+      new THREE.MeshBasicMaterial({ map: dispTexture }));
+    displayPlane.position.set(xPos,0.4,1.01);
+    scene.add(displayPlane);
+    rig.drawDisplay = drawDisplay; rig.dispTexture = dispTexture;
+
+    const flaskGroup = new THREE.Group();
+    flaskGroup.position.set(xPos, 0.56, 0);
+    scene.add(flaskGroup);
+    rig.flaskGroup = flaskGroup;
+    const flaskPts = [
+      [0,0],[1.4,0.05],[1.45,0.13],[1.35,0.4],[1.1,0.9],[0.78,1.4],
+      [0.5,1.75],[0.4,1.8],[0.4,2.65],[0.46,2.72],[0.43,2.76]
+    ].map(p => new THREE.Vector2(p[0], p[1]));
+    const flask = new THREE.Mesh(new THREE.LatheGeometry(flaskPts, 36), new THREE.MeshPhysicalMaterial({
+      color:0xbfe9ff, transparent:true, opacity:0.22, roughness:0.05, metalness:0,
+      transmission:0.55, thickness:0.6, ior:1.4, clearcoat:1, clearcoatRoughness:0.08, side:THREE.DoubleSide, depthWrite:false
+    }));
+    flask.renderOrder = 2; flaskGroup.add(flask);
+
+    const liquidPts = [[0,0],[1.35,0.05],[1.4,0.13],[1.3,0.36],[1.05,0.85],[0.72,1.32]].map(p => new THREE.Vector2(p[0], p[1]));
+    const liquid = new THREE.Mesh(new THREE.LatheGeometry(liquidPts, 28), new THREE.MeshPhysicalMaterial({
+      color:0x0099cc, transparent:true, opacity:0.3, roughness:0.15, transmission:0.25, side:THREE.DoubleSide, depthWrite:false
+    }));
+    liquid.renderOrder = 1; flaskGroup.add(liquid);
+
+    const granuleMat = new THREE.MeshStandardMaterial({
+      color:0xf0ead8, metalness:0.08, roughness:0.55,
+      emissive:new THREE.Color(preset.color), emissiveIntensity:0.16
+    });
+    rig.granules = [];
+    function buildGranules(){
+      rig.granules.forEach(g => flaskGroup.remove(g));
+      rig.granules = [];
+      for (let i=0;i<preset.granuleCount;i++){
+        const r = preset.granuleSizeRange[0] + Math.random()*(preset.granuleSizeRange[1]-preset.granuleSizeRange[0]);
+        const geo = new THREE.IcosahedronGeometry(r, 0);
+        const posAttr = geo.attributes.position;
+        for (let v=0; v<posAttr.count; v++){
+          posAttr.setXYZ(v,
+            posAttr.getX(v) * (0.85+Math.random()*0.3),
+            posAttr.getY(v) * (0.85+Math.random()*0.3),
+            posAttr.getZ(v) * (0.85+Math.random()*0.3));
+        }
+        geo.computeVertexNormals();
+        const m = new THREE.Mesh(geo, granuleMat);
+        const ang = Math.random()*Math.PI*2, rad = Math.random()*0.36;
+        m.position.set(Math.cos(ang)*rad, 0.07+Math.random()*0.14, Math.sin(ang)*rad);
+        m.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
+        m.renderOrder = 3;
+        flaskGroup.add(m);
+        rig.granules.push(m);
+      }
+    }
+    rig.buildGranules = buildGranules;
+    buildGranules();
+
+    const bubbleMat = makeBubbleMaterial();
+    function spawnBubble(m, rateFrac){
+      rateFrac = (rateFrac===undefined) ? 1 : rateFrac;
+      const g = rig.granules[Math.floor(Math.random()*rig.granules.length)];
+      const ang = Math.random()*Math.PI*2;
+      if (g){ m.position.set(g.position.x + Math.cos(ang)*0.04, g.position.y + 0.04, g.position.z + Math.sin(ang)*0.04); }
+      else { m.position.set(Math.cos(ang)*0.2, 0.1, Math.sin(ang)*0.2); }
+      m.userData.baseX = m.position.x; m.userData.baseZ = m.position.z;
+      m.userData.speed = (0.3 + Math.random()*0.5) * (0.55+0.45*rateFrac) * preset.bubbleSpeedMult;
+      m.userData.wobble = 0.035 + Math.random()*0.035;
+      m.userData.wobbleFreq = (2 + Math.random()*2) * preset.wobbleFreqMult;
+      m.userData.phase = Math.random()*Math.PI*2;
+      m.userData.spawnTime = performance.now();
+      m.userData.baseScale = (1.0 + Math.random()*0.9) * (0.45+0.55*rateFrac) * preset.bubbleSizeMult;
+      m.userData.dying = false;
+      m.scale.setScalar(0.05);
+    }
+    rig.bubbles = [];
+    const bubblePoolSize = Math.max(8, Math.round(16 * preset.bubbleRateMult));
+    for (let i=0;i<bubblePoolSize;i++){
+      const r = 0.026 + Math.random()*0.03;
+      const m = new THREE.Mesh(new THREE.SphereGeometry(r,10,10), bubbleMat);
+      m.renderOrder = 999;
+      flaskGroup.add(m);
+      spawnBubble(m, 1);
+      m.position.y = 0.08 + Math.random()*1.1;
+      rig.bubbles.push(m);
+    }
+    rig.spawnBubble = spawnBubble;
+
+    // Note: an earlier version of this simulation showed small "escaped gas" bubbles
+    // drifting near the cotton plug at each flask's mouth. That has been removed
+    // entirely — no bubbles are created or rendered anywhere near the cotton now.
+    rig.escapees = [];
+    rig.spawnEscapee = function(){};
+
+    const cottonMat = new THREE.MeshStandardMaterial({ color:0xf2f2ee, roughness:0.95 });
+    const cottonGroup = new THREE.Group();
+    cottonGroup.position.set(0,2.78,0);
+    for (let i=0;i<6;i++){
+      const r = 0.13 + Math.random()*0.07;
+      const puff = new THREE.Mesh(new THREE.SphereGeometry(r,8,8), cottonMat);
+      puff.position.set((Math.random()-0.5)*0.4, Math.random()*0.18, (Math.random()-0.5)*0.4);
+      cottonGroup.add(puff);
+    }
+    flaskGroup.add(cottonGroup);
+
+    const label = makeLabel(preset.label);
+    label.position.set(0, 3.55, 0.4);
+    flaskGroup.add(label);
+
+    return rig;
+  }
+
+  const rigs = [buildRig(presets.lumps), buildRig(presets.chips), buildRig(presets.powder)];
+
+  let theta = 0.35, phi = 1.12, radius = 15.5;
+  const BASE_TARGET_X = 0.4, BASE_TARGET_Y = 1.5;
+  const target = new THREE.Vector3(BASE_TARGET_X, BASE_TARGET_Y, 0);
+  function updateCam(){
+    camera.position.x = target.x + radius*Math.sin(phi)*Math.sin(theta);
+    camera.position.z = target.z + radius*Math.sin(phi)*Math.cos(theta);
+    camera.position.y = target.y + radius*Math.cos(phi);
+    camera.lookAt(target);
+  }
+  let dragging = false, px=0, py=0;
+  canvas.addEventListener('pointerdown', e=>{ dragging=true; px=e.clientX; py=e.clientY; canvas.style.cursor='grabbing'; });
+  window.addEventListener('pointerup', ()=>{ dragging=false; canvas.style.cursor='grab'; });
+  window.addEventListener('pointermove', e=>{
+    if (!dragging) return;
+    theta -= (e.clientX-px)*0.006;
+    phi = Math.min(Math.max(phi - (e.clientY-py)*0.006, 0.25), Math.PI-0.25);
+    px = e.clientX; py = e.clientY; updateCam();
+  });
+  canvas.addEventListener('wheel', e=>{
+    e.preventDefault();
+    radius = Math.min(Math.max(radius + e.deltaY*0.01, 6), 26);
+    updateCam();
+  }, { passive:false });
+  resize(); updateCam();
+  window.addEventListener('resize', resize);
+  // Direct, guaranteed way to scroll the framing -- handy when zoomed in on one flask
+  // and its collision close-up at the same time.
+  window.onPanSlider = function(value){
+    target.y = BASE_TARGET_Y - parseFloat(value);
+    updateCam();
+  };
+  window.onPanSliderX = function(value){
+    target.x = BASE_TARGET_X + parseFloat(value);
+    updateCam();
+  };
+
+  let t = 0, running = false, timer = null;
+  const chart = new Chart(document.getElementById('massChart'), {
+    type:'line',
+    data:{ datasets: rigs.map(r => ({
+      label: r.preset.label, data: r.dataArr,
+      borderColor: r.preset.color, backgroundColor:'transparent',
+      borderWidth:2, pointRadius:0, tension:0.25
+    })) },
+    options:{
+      responsive:true, maintainAspectRatio:false, animation:false,
+      plugins:{ legend:{ display:true, labels:{ color:'#ccc', boxWidth:12, font:{size:11} } } },
+      scales:{
+        x:{ type:'linear', min:0, max:160, title:{ display:true, text:'Time (s)', color:'#9fffb0' }, ticks:{ color:'#9fffb0' }, grid:{ color:'#1a1a1a' } },
+        y:{ min: M0-massLossMax*1.15, max: M0+0.01,
+            title:{ display:true, text:'Mass of flask and contents (g)', color:'#FF7CD4' },
+            ticks:{ color:'#FF7CD4', callback:v=>v.toFixed(3) }, grid:{ color:'#1a1a1a' } }
+      }
+    }
+  });
+
+  function updateRigDisplay(rig, M){
+    const lost = M0 - M;
+    const frac = Math.min(1, lost / massLossMax);
+    rig.granules.forEach(g => {
+      const s = Math.max(0.04, 1 - 0.97*frac);
+      g.scale.setScalar(s);
+      g.visible = s > 0.045;
+    });
+    document.getElementById('massOut-'+rig.preset.key).textContent = M.toFixed(4);
+    rig.drawDisplay(M.toFixed(4));
+    rig.dispTexture.needsUpdate = true;
+    if (frac > 0.995) rig.done = true;
+  }
+
+  function tick(){
+    t += 0.5;
+    let allDone = true;
+    rigs.forEach(rig=>{
+      const M = M0 - massLossMax*(1 - Math.exp(-rig.preset.k*t));
+      rig.dataArr.push({x:t,y:M});
+      updateRigDisplay(rig, M);
+      if (!rig.done) allDone = false;
+    });
+    if (t + 20 > chart.options.scales.x.max){
+      chart.options.scales.x.max = Math.min(650, Math.ceil((t+50)/25)*25);
+    }
+    chart.update();
+    document.getElementById('timeOut').textContent = t.toFixed(1);
+    if (allDone || t > 650){
+      stopRun();
+      document.getElementById('playLabel').textContent = 'Reaction complete';
+    }
+  }
+  window.toggleRun = function(){ running ? stopRun() : startRun(); };
+  function startRun(){
+    running = true;
+    document.getElementById('playLabel').textContent = 'Pause';
+    document.querySelector('#playBtn i').className = 'ti ti-player-pause';
+    timer = setInterval(tick, 120);
+  }
+  function stopRun(){
+    running = false;
+    document.getElementById('playLabel').textContent = 'Resume';
+    document.querySelector('#playBtn i').className = 'ti ti-player-play';
+    if (timer) clearInterval(timer);
+  }
+  window.resetSim = function(){
+    stopRun();
+    t = 0;
+    chart.options.scales.x.max = 160;
+    document.getElementById('timeOut').textContent = '0.0';
+    rigs.forEach(rig=>{
+      rig.done = false;
+      rig.dataArr.length = 0; rig.dataArr.push({x:0,y:M0});
+      updateRigDisplay(rig, M0);
+      rig.buildGranules();
+      rig.bubbles.forEach(b => { b.userData.dying = false; rig.spawnBubble(b, 1); b.position.y = 0.08+Math.random()*1.1; });
+      rig.escapees.forEach(rig.spawnEscapee);
+    });
+    chart.update();
+    document.getElementById('playLabel').textContent = 'Start all reactions';
+  };
+
+  function maybeRespawn(b, ceiling, rateFrac, spawnFn, mult, canSpawn){
+    if (b.position.y > ceiling && !b.userData.dying){
+      if (canSpawn && Math.random() < Math.min(1, Math.max(rateFrac, 0.025)*mult)){
+        spawnFn(b, rateFrac);
+        return;
+      } else {
+        // No more bubbles will form here (flask finished or paused) — let this
+        // one keep drifting upward and fade out rather than freezing in place.
+        b.userData.dying = true;
+        b.userData.dyingStart = performance.now();
+        b.userData.dyingScale = b.scale.x;
+      }
+    }
+    if (b.userData.dying){
+      const age = (performance.now() - b.userData.dyingStart) / 1000;
+      const s = Math.max(0, b.userData.dyingScale * (1 - age/0.6));
+      b.scale.setScalar(s);
+      if (s <= 0.0005){
+        // fully dissolved away — park it invisibly until it can spawn again
+        b.scale.setScalar(0.0001);
+        if (canSpawn) spawnFn(b, rateFrac);
+      }
+    }
+  }
+
+  let last = performance.now();
+  function animate(){
+    requestAnimationFrame(animate);
+    const now = performance.now();
+    const delta = (now-last)/1000; last = now;
+    rigs.forEach(rig=>{
+      // Bubbles keep animating as long as the sim is running, OR this flask's
+      // own reaction has already finished (so its leftover bubbles can rise
+      // and disappear naturally even after the whole sim auto-stops). A
+      // manual pause on a flask that isn't finished yet still freezes it.
+      if (!running && !rig.done) return;
+      const rateFrac = Math.max(0, Math.exp(-rig.preset.k*t));
+      const mult = rig.preset.bubbleRateMult;
+      // No new bubbles are ever created once this flask is done — stops
+      // exactly in step with its mass curve flattening on the graph.
+      const canSpawn = running && !rig.done;
+      rig.bubbles.forEach(b=>{
+        b.position.y += b.userData.speed*delta;
+        const age = (now - b.userData.spawnTime)/1000;
+        b.position.x = b.userData.baseX + Math.sin(age*b.userData.wobbleFreq + b.userData.phase)*b.userData.wobble;
+        b.position.z = b.userData.baseZ + Math.cos(age*b.userData.wobbleFreq*0.8 + b.userData.phase)*b.userData.wobble;
+        if (b.scale.x > 0.0005 && !b.userData.dying) b.scale.setScalar(b.userData.baseScale*Math.min(1, age/0.22));
+        // A bubble reaching the liquid surface has popped — hide it immediately rather
+        // than letting it keep rising/fading visibly above the solution line.
+        if (b.position.y >= SURFACE_Y) b.scale.setScalar(0.0001);
+        maybeRespawn(b, SURFACE_Y, rateFrac, rig.spawnBubble, mult, canSpawn);
+      });
+      rig.escapees.forEach(m=>{
+        m.position.y += m.userData.speed*delta;
+        const age = (now - m.userData.spawnTime)/1000;
+        m.material.uniforms.fade.value = Math.max(0, 1-age/1.6);
+        // Never render an "escaped" bubble above the cotton plug — it should dissipate
+        // at or below that height, not float visibly above it.
+        if (m.position.y >= COTTON_TOP_Y) m.material.uniforms.fade.value = 0;
+        const shouldRespawn = (m.position.y > 4.2 || m.material.uniforms.fade.value <= 0.02);
+        if (canSpawn && shouldRespawn && Math.random() < Math.min(1, Math.max(rateFrac, 0.02)*mult)) rig.spawnEscapee(m);
+        else if (shouldRespawn) { m.position.y = 2.55; m.material.uniforms.fade.value = 0; }
+      });
+    });
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  // ===================== Collision-frequency close-up (plain 2D canvas, not three.js) =====================
+  // Illustrates the surface-area concept from the reference diagrams: the same red HCl
+  // particles bounce around a small box, but the marble is presented either as one large
+  // square (lumps), several medium squares (chips), or many small squares (powder). Both
+  // the amount of exposed surface AND the number of particles reacting at once scale up
+  // together, so the green collision flashes visibly happen far more often as you go from
+  // lumps to chips to powder.
+  function squaresFor(kind){
+    if (kind === 'lumps') return [{x:30,y:25,w:88,h:88}];
+    if (kind === 'chips') return [
+      {x:8,y:8,w:30,h:30}, {x:54,y:12,w:28,h:28}, {x:98,y:24,w:28,h:28},
+      {x:14,y:64,w:30,h:30}, {x:60,y:74,w:32,h:32}, {x:100,y:96,w:26,h:26}
+    ];
+    const squares = [];
+    for (let i=0;i<14;i++){
+      const w = 11+Math.random()*6;
+      squares.push({x:6+Math.random()*(150-w-12), y:6+Math.random()*(150-w-12), w, h:w});
+    }
+    return squares;
+  }
+  const PARTICLE_COUNT = { lumps:6, chips:13, powder:24 };
+  function setupCollisionCanvas(id, kind){
+    const cvs = document.getElementById(id);
+    const ctx = cvs.getContext('2d');
+    const W = cvs.width, H = cvs.height;
+    const squares = squaresFor(kind);
+    const particles = [];
+    for (let i=0;i<PARTICLE_COUNT[kind];i++){
+      particles.push({
+        x: Math.random()*W, y: Math.random()*H,
+        vx: (Math.random()-0.5)*36, vy: (Math.random()-0.5)*36,
+        r: 3.6 + Math.random()*1.6
+      });
+    }
+    const flashes = [];
+    function collideSquares(p){
+      for (const s of squares){
+        const cx = Math.max(s.x, Math.min(p.x, s.x+s.w));
+        const cy = Math.max(s.y, Math.min(p.y, s.y+s.h));
+        const dx = p.x-cx, dy = p.y-cy;
+        const distSq = dx*dx+dy*dy;
+        if (distSq < p.r*p.r){
+          const dist = Math.sqrt(distSq) || 0.0001;
+          const nx = dx/dist, ny = dy/dist;
+          p.x = cx + nx*p.r; p.y = cy + ny*p.r;
+          const dot = p.vx*nx + p.vy*ny;
+          if (dot < 0){ p.vx -= 2*dot*nx; p.vy -= 2*dot*ny; }
+          p.vx += (Math.random()-0.5)*10; p.vy += (Math.random()-0.5)*10;
+          return {x:cx, y:cy};
+        }
+      }
+      return null;
+    }
+    function step(dt){
+      particles.forEach(p=>{
+        p.x += p.vx*dt; p.y += p.vy*dt;
+        if (p.x < p.r){ p.x=p.r; p.vx*=-1; }
+        if (p.x > W-p.r){ p.x=W-p.r; p.vx*=-1; }
+        if (p.y < p.r){ p.y=p.r; p.vy*=-1; }
+        if (p.y > H-p.r){ p.y=H-p.r; p.vy*=-1; }
+        const hit = collideSquares(p);
+        if (hit) flashes.push({x:hit.x, y:hit.y, age:0});
+      });
+      for (let i=flashes.length-1;i>=0;i--){
+        flashes[i].age += dt;
+        if (flashes[i].age > 0.35) flashes.splice(i,1);
+      }
+    }
+    function draw(){
+      ctx.fillStyle = '#000'; ctx.fillRect(0,0,W,H);
+      squares.forEach(s=>{
+        ctx.fillStyle = '#cfc9ba';
+        ctx.fillRect(s.x, s.y, s.w, s.h);
+        ctx.strokeStyle = '#8f8a7c';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(s.x, s.y, s.w, s.h);
+      });
+      if (kind === 'lumps' && squares.length){
+        // decorative dashed grid, echoing the reference diagram -- shows this single
+        // block is the same total marble as the fragmented pieces in the other panels
+        const s = squares[0];
+        ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1;
+        ctx.setLineDash([4,4]);
+        for (let i=1;i<3;i++){
+          const gx = s.x + s.w*i/3;
+          ctx.beginPath(); ctx.moveTo(gx, s.y); ctx.lineTo(gx, s.y+s.h); ctx.stroke();
+          const gy = s.y + s.h*i/3;
+          ctx.beginPath(); ctx.moveTo(s.x, gy); ctx.lineTo(s.x+s.w, gy); ctx.stroke();
+        }
+        ctx.setLineDash([]);
+      }
+      flashes.forEach(f=>{
+        const p = f.age/0.35;
+        ctx.strokeStyle = 'rgba(57,255,20,' + (1-p) + ')';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(f.x,f.y, 4+p*10, 0, Math.PI*2); ctx.stroke();
+      });
+      particles.forEach(p=>{
+        const grad = ctx.createRadialGradient(p.x-1,p.y-1,0.5,p.x,p.y,p.r);
+        grad.addColorStop(0,'#ffb0b0'); grad.addColorStop(1,'#e21f1f');
+        ctx.fillStyle = grad;
+        ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+      });
+    }
+    return { step, draw };
+  }
+
+  const collisionCanvases = {
+    lumps: setupCollisionCanvas('collisionLumps', 'lumps'),
+    chips: setupCollisionCanvas('collisionChips', 'chips'),
+    powder: setupCollisionCanvas('collisionPowder', 'powder')
+  };
+  const overlayEls = {
+    lumps: document.getElementById('collisionOverlay-lumps'),
+    chips: document.getElementById('collisionOverlay-chips'),
+    powder: document.getElementById('collisionOverlay-powder')
+  };
+  const anchorLocal = new THREE.Vector3(0, 4.4, 0.4);
+  function positionOverlay(rig, el){
+    const world = rig.flaskGroup.localToWorld(anchorLocal.clone());
+    const ndc = world.project(camera);
+    if (ndc.z >= 1){ el.style.display = 'none'; return; }
+    const x = (ndc.x*0.5+0.5) * wrap.clientWidth;
+    const y = (1-(ndc.y*0.5+0.5)) * wrap.clientHeight;
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    el.style.display = 'block';
+  }
+
+  let collisionVisible = false, collisionLast = null;
+  function collisionLoop(now){
+    if (!collisionVisible) return;
+    if (collisionLast === null) collisionLast = now;
+    const dt = Math.min(0.05, (now-collisionLast)/1000);
+    collisionLast = now;
+    rigs.forEach(rig=>{
+      const cc = collisionCanvases[rig.preset.key];
+      cc.step(dt); cc.draw();
+      positionOverlay(rig, overlayEls[rig.preset.key]);
+    });
+    requestAnimationFrame(collisionLoop);
+  }
+  window.toggleCollisionPanel = function(){
+    collisionVisible = !collisionVisible;
+    Object.values(overlayEls).forEach(el => { el.style.display = collisionVisible ? 'block' : 'none'; });
+    document.getElementById('collisionBtnLabel').textContent = collisionVisible ? 'Hide collision close-up' : 'Show collision close-up';
+    if (collisionVisible){ collisionLast = null; requestAnimationFrame(collisionLoop); }
+  };
+})();
+</script>
+
+<style id="rateChallengeStyle">
+.rate-challenge{max-width:900px;margin:22px auto;background:#050505;border:1px solid #2b2b2b;border-radius:12px;padding:18px 16px;font-family:-apple-system,'Segoe UI',sans-serif;color:#eee}.rate-challenge h2{margin:0 0 6px;color:#39FFE8;font-size:18px}.rate-challenge .intro{color:#aaa;font-size:13px;margin:0 0 14px}.rc-q{border-top:1px solid #222;padding:14px 0}.rc-q:first-of-type{border-top:0}.rc-prompt{line-height:1.45;margin-bottom:9px}.rc-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.rc-row input{background:#0b0b0b;color:#fff;border:1px solid #555;border-radius:6px;padding:9px 10px;width:150px;font-size:14px}.rc-row button{background:#0a0a0a;color:#39FFE8;border:1px solid #39FFE8;border-radius:6px;padding:9px 12px;cursor:pointer}.rc-row button.hint{color:#FFD23C;border-color:#FFD23C}.rc-feedback{min-height:20px;margin-top:8px;font-size:13px}.rc-hint{display:none;color:#FFD23C;margin-top:7px;font-size:12px}.rc-unit{color:#bbb;font-size:13px}</style><section class="rate-challenge"><h2>Student Challenge</h2><p class="intro">Calculate before revealing help. Enter a numerical answer; reasonable rounding is accepted.</p><div class="rc-q" data-answer="0.066" data-tol="0.003"><div class="rc-prompt">For the powder curve, calculate the initial rate of mass loss from the model. Enter the magnitude of the rate.</div><div class="rc-row"><input type="number" step="any" inputmode="decimal" aria-label="Answer for challenge 1"><span class="rc-unit">g s⁻¹</span><button type="button" class="check">Check answer</button><button type="button" class="hint">Hint</button></div><div class="rc-feedback" aria-live="polite"></div><div class="rc-hint">For M = M₀ − Δmmax(1−e⁻ᵏᵗ), the initial rate magnitude is Δmmax × k.</div></div><div class="rc-q" data-answer="0.01305546749" data-tol="0.002"><div class="rc-prompt">For the small chips curve, calculate the average rate of mass loss over the first 20 s. Enter the magnitude.</div><div class="rc-row"><input type="number" step="any" inputmode="decimal" aria-label="Answer for challenge 2"><span class="rc-unit">g s⁻¹</span><button type="button" class="check">Check answer</button><button type="button" class="hint">Hint</button></div><div class="rc-feedback" aria-live="polite"></div><div class="rc-hint">Use |Δm|/Δt.</div></div></section><script>(function(){document.querySelectorAll('.rate-challenge .rc-q').forEach(function(q){var input=q.querySelector('input'),fb=q.querySelector('.rc-feedback'),hint=q.querySelector('.rc-hint');q.querySelector('.check').addEventListener('click',function(){var v=Number(input.value),a=Number(q.dataset.answer),t=Number(q.dataset.tol);if(!Number.isFinite(v)){fb.textContent='Enter a numerical value first.';fb.style.color='#FFD23C';return;}if(Math.abs(v-a)<=t){fb.textContent='Correct — your calculation is within the accepted rounding range.';fb.style.color='#39FF14';}else{fb.textContent='Not yet. Check the values, units and gradient calculation, then try again.';fb.style.color='#FF7CD4';}});q.querySelector('.hint').addEventListener('click',function(){var show=hint.style.display!=='block';hint.style.display=show?'block':'none';this.textContent=show?'Hide hint':'Hint';});});})();</script>
